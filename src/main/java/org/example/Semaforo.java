@@ -4,6 +4,20 @@ public class Semaforo implements Runnable {
     private String estadoHorizontal = "ROJO";
     private String estadoVertical = "VERDE";
 
+    private final long duracionVerdeMs;
+    private final long duracionAmarilloMs;
+    private final long duracionRojoMs;
+
+    public Semaforo() {
+        this(5, 2, 1);
+    }
+
+    public Semaforo(int verdeSeg, int amarilloSeg, int rojoSeg) {
+        this.duracionVerdeMs = verdeSeg * 1000L;
+        this.duracionAmarilloMs = amarilloSeg * 1000L;
+        this.duracionRojoMs = rojoSeg * 1000L;
+    }
+
     public synchronized String getEstadoHorizontal() { return estadoHorizontal; }
     public synchronized String getEstadoVertical() { return estadoVertical; }
 
@@ -19,22 +33,22 @@ public class Semaforo implements Runnable {
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 cambiarEstados("ROJO", "VERDE");
-                Thread.sleep(5000);
+                Thread.sleep(duracionVerdeMs);
 
                 cambiarEstados("ROJO", "AMARILLO");
-                Thread.sleep(2000);
+                Thread.sleep(duracionAmarilloMs);
 
                 cambiarEstados("ROJO", "ROJO");
-                Thread.sleep(1000);
+                Thread.sleep(duracionRojoMs);
 
                 cambiarEstados("VERDE", "ROJO");
-                Thread.sleep(5000);
+                Thread.sleep(duracionVerdeMs);
 
                 cambiarEstados("AMARILLO", "ROJO");
-                Thread.sleep(2000);
+                Thread.sleep(duracionAmarilloMs);
 
                 cambiarEstados("ROJO", "ROJO");
-                Thread.sleep(1000);
+                Thread.sleep(duracionRojoMs);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
