@@ -9,16 +9,20 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SimuladorMain extends Application {
 
+    // El modo manual conserva el mapa integrado que ya utilizaba la aplicación.
     private final int[][] diseñoCiudad = {
-            // GLOSARIO
             // 0 -> ZonaNoAccesible
             // 1 -> CalleUnSentido: NORTE
             // 2 -> CalleUnSentido: SUR
@@ -39,15 +43,37 @@ public class SimuladorMain extends Application {
             {0, 0, 0, 0, 8, 0, 0, 0, 0}
     };
 
+    private final CargadorConfiguracionXml cargadorXml = new CargadorConfiguracionXml();
+    private DefinicionSimulacion definicionXml;
+    private Path rutaXml;
+    private boolean iniciarEnModoXml;
+    private String errorCargaInicial;
+
     @Override
     public void start(Stage primaryStage) {
+        List<String> argumentos = getParameters().getRaw();
+        if (!argumentos.isEmpty()) {
+            iniciarEnModoXml = true;
+            if (argumentos.size() > 1) {
+                errorCargaInicial = "Indica como máximo un archivo XML como argumento.";
+            } else {
+                cargarXmlInicial(argumentos.get(0));
+            }
+        }
         mostrarMenuConfiguracion(primaryStage);
     }
 
-    private void mostrarMenuConfiguracion(Stage stage) {
-        // Extraer dinámicamente las coordenadas de los PuntoGeneracion (celdas con valor 8) de la matriz
-        List<int[]> coordenadasSpawns = obtenerCoordenadasSpawns(diseñoCiudad);
+    private void cargarXmlInicial(String ruta) {
+        try {
+            rutaXml = Path.of(ruta).toAbsolutePath().normalize();
+            definicionXml = cargadorXml.cargar(rutaXml);
+        } catch (IOException | IllegalArgumentException ex) {
+            definicionXml = null;
+            errorCargaInicial = "No se pudo cargar el archivo XML: " + ex.getMessage();
+        }
+    }
 
+    private void mostrarMenuConfiguracion(Stage stage) {
         VBox contenedor = new VBox(14);
         contenedor.setPadding(new Insets(22));
         contenedor.setStyle("-fx-background-color: #232730;");
@@ -56,15 +82,37 @@ public class SimuladorMain extends Application {
         titulo.setFont(Font.font("System", FontWeight.BOLD, 18));
         titulo.setTextFill(Color.WHITE);
 
-        Label subtitulo = new Label("Deja los campos vacíos para usar los valores establecidos por defecto.");
+        Label subtitulo = new Label(
+                "Configura manualmente o carga un archivo XML. Sin argumento, no se carga ningún archivo automáticamente.");
         subtitulo.setTextFill(Color.LIGHTGRAY);
         subtitulo.setFont(Font.font("System", 12));
+        subtitulo.setWrapText(true);
 
-        // 1. Cantidad de vehículos (20 - 200)
+        RadioButton rbManual = new RadioButton("Configurar manualmente");
+        RadioButton rbArchivoXml = new RadioButton("Cargar configuración XML");
+        rbManual.setTextFill(Color.WHITE);
+        rbArchivoXml.setTextFill(Color.WHITE);
+        ToggleGroup grupoFuente = new ToggleGroup();
+        rbManual.setToggleGroup(grupoFuente);
+        rbArchivoXml.setToggleGroup(grupoFuente);
+        rbManual.setSelected(!iniciarEnModoXml);
+        rbArchivoXml.setSelected(iniciarEnModoXml);
+        HBox opcionesFuente = new HBox(16, rbManual, rbArchivoXml);
+
+        Button btnSeleccionarArchivo = new Button("Elegir archivo XML…");
+        Label lblArchivo = new Label();
+        lblArchivo.setTextFill(Color.LIGHTGRAY);
+        lblArchivo.setWrapText(true);
+        HBox selectorArchivo = new HBox(10, btnSeleccionarArchivo, lblArchivo);
+        selectorArchivo.setAlignment(Pos.CENTER_LEFT);
+
+        Label lblResumenXml = new Label();
+        lblResumenXml.setTextFill(Color.LIGHTGRAY);
+        lblResumenXml.setWrapText(true);
+
         TextField txtVehiculos = new TextField();
         txtVehiculos.setPromptText("Número de vehículos");
 
-        // 2. Duración de las luces de los semáforos (segundos)
         TextField txtVerde = new TextField();
         txtVerde.setPromptText("Verde");
 
@@ -76,80 +124,146 @@ public class SimuladorMain extends Application {
 
         HBox boxSemaforos = new HBox(10, txtVerde, txtAmarillo, txtRojo);
 
-        // 3. Punto de partida
         ComboBox<String> cmbModoOrigen = new ComboBox<>();
         cmbModoOrigen.getItems().addAll("Aleatorio", "Elegir punto");
         cmbModoOrigen.setValue("Aleatorio");
 
         ComboBox<String> cmbCoordOrigen = new ComboBox<>();
-        for (int[] c : coordenadasSpawns) {
-            cmbCoordOrigen.getItems().add(formatearCoordenada(c));
-        }
-        if (!cmbCoordOrigen.getItems().isEmpty()) {
-            cmbCoordOrigen.getSelectionModel().select(0);
-        }
         cmbCoordOrigen.setDisable(true);
-        cmbModoOrigen.setOnAction(e -> cmbCoordOrigen.setDisable("Aleatorio".equals(cmbModoOrigen.getValue())));
-
+        cmbModoOrigen.setOnAction(
+                e -> cmbCoordOrigen.setDisable("Aleatorio".equals(cmbModoOrigen.getValue())));
         HBox boxOrigen = new HBox(10, cmbModoOrigen, cmbCoordOrigen);
 
-        // 4. Punto de llegada
         ComboBox<String> cmbModoDestino = new ComboBox<>();
         cmbModoDestino.getItems().addAll("Aleatorio", "Elegir punto");
         cmbModoDestino.setValue("Aleatorio");
 
         ComboBox<String> cmbCoordDestino = new ComboBox<>();
-        for (int[] c : coordenadasSpawns) {
-            cmbCoordDestino.getItems().add(formatearCoordenada(c));
-        }
-        if (cmbCoordDestino.getItems().size() > 1) {
-            cmbCoordDestino.getSelectionModel().select(1);
-        }
         cmbCoordDestino.setDisable(true);
-        cmbModoDestino.setOnAction(e -> cmbCoordDestino.setDisable("Aleatorio".equals(cmbModoDestino.getValue())));
-
+        cmbModoDestino.setOnAction(
+                e -> cmbCoordDestino.setDisable("Aleatorio".equals(cmbModoDestino.getValue())));
         HBox boxDestino = new HBox(10, cmbModoDestino, cmbCoordDestino);
 
-        // Mensaje de validación
         Label lblError = new Label();
         lblError.setTextFill(Color.SALMON);
         lblError.setWrapText(true);
 
-        // Botón de inicio
         Button btnIniciar = new Button("Iniciar Simulación");
-        btnIniciar.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8 18;");
-
+        btnIniciar.setStyle(
+                "-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8 18;");
         HBox boxBotones = new HBox(12, btnIniciar);
         boxBotones.setAlignment(Pos.CENTER_RIGHT);
 
-        // Validar que haya mínimo 2 PuntoGeneracion en el mapa
-        if (coordenadasSpawns.size() < 2) {
-            lblError.setText("Error: El mapa debe tener al menos 2 Spawns para iniciar.");
-            btnIniciar.setDisable(true);
+        List<int[]> coordenadasSpawns = new ArrayList<>();
+        Runnable actualizarModo = () -> {
+            boolean modoXml = rbArchivoXml.isSelected();
+            int[][] mapaActivo = modoXml
+                    ? (definicionXml == null ? null : definicionXml.getDiseñoCiudad())
+                    : diseñoCiudad;
+
+            coordenadasSpawns.clear();
+            if (mapaActivo != null) {
+                coordenadasSpawns.addAll(obtenerCoordenadasSpawns(mapaActivo));
+            }
+            actualizarComboSpawns(cmbCoordOrigen, cmbCoordDestino, coordenadasSpawns);
+
+            txtVehiculos.setDisable(modoXml);
+            txtVerde.setDisable(modoXml);
+            txtAmarillo.setDisable(modoXml);
+            txtRojo.setDisable(modoXml);
+
+            if (modoXml) {
+                lblArchivo.setText(rutaXml == null
+                        ? "Selecciona un archivo XML para cargar el mapa y la configuración."
+                        : "Archivo: " + rutaXml);
+                if (definicionXml == null) {
+                    lblResumenXml.setText("");
+                } else {
+                    ConfiguracionSimulacion configXml = definicionXml.getConfiguracion();
+                    int[][] mapaXml = definicionXml.getDiseñoCiudad();
+                    String idsConfiguracion = String.join(", ",
+                            configXml.getConfiguracionesSemaforo().keySet().stream().sorted().toList());
+                    lblResumenXml.setText("Configuración cargada: " + configXml.getCantidadVehiculos()
+                            + " vehículos; mapa de " + mapaXml[0].length + " × " + mapaXml.length
+                            + "; " + configXml.getConfiguracionesSemaforo().size()
+                            + " configuraciones de semáforo (" + idsConfiguracion + ").");
+                }
+            } else {
+                lblArchivo.setText("Modo manual: se utilizará el mapa integrado en el simulador.");
+                lblResumenXml.setText("");
+            }
+
+            btnIniciar.setDisable(coordenadasSpawns.size() < 2 || (modoXml && definicionXml == null));
+        };
+
+        rbManual.setOnAction(e -> {
+            lblError.setText("");
+            actualizarModo.run();
+        });
+        rbArchivoXml.setOnAction(e -> {
+            lblError.setText("");
+            actualizarModo.run();
+        });
+
+        btnSeleccionarArchivo.setOnAction(e -> {
+            FileChooser selector = new FileChooser();
+            selector.setTitle("Seleccionar configuración XML");
+            selector.getExtensionFilters().add(
+                    new FileChooser.ExtensionFilter("Archivos XML", "*.xml"));
+            if (rutaXml != null && rutaXml.getParent() != null && rutaXml.getParent().toFile().isDirectory()) {
+                selector.setInitialDirectory(rutaXml.getParent().toFile());
+            }
+            File archivo = selector.showOpenDialog(stage);
+            if (archivo == null) {
+                return;
+            }
+            try {
+                Path nuevaRuta = archivo.toPath().toAbsolutePath().normalize();
+                DefinicionSimulacion nuevaDefinicion = cargadorXml.cargar(nuevaRuta);
+                rutaXml = nuevaRuta;
+                definicionXml = nuevaDefinicion;
+                iniciarEnModoXml = true;
+                rbArchivoXml.setSelected(true);
+                lblError.setText("");
+                actualizarModo.run();
+            } catch (IOException | IllegalArgumentException ex) {
+                lblError.setText("No se pudo cargar el archivo XML: " + ex.getMessage());
+            }
+        });
+
+        actualizarModo.run();
+        if (errorCargaInicial != null) {
+            lblError.setText(errorCargaInicial);
         }
 
         btnIniciar.setOnAction(e -> {
             lblError.setText("");
+            boolean modoXml = rbArchivoXml.isSelected();
+            if (modoXml && definicionXml == null) {
+                lblError.setText("Selecciona un archivo XML válido o cambia al modo manual.");
+                return;
+            }
             if (coordenadasSpawns.size() < 2) {
-                lblError.setText("Error: Se requieren al menos 2 Spawns para iniciar.");
+                lblError.setText("Se requieren al menos 2 Spawns para iniciar.");
                 return;
             }
 
-            ConfiguracionSimulacion config = new ConfiguracionSimulacion();
+            int[][] mapaActivo = modoXml ? definicionXml.getDiseñoCiudad() : diseñoCiudad;
+            ConfiguracionSimulacion config = modoXml
+                    ? definicionXml.getConfiguracion()
+                    : new ConfiguracionSimulacion();
 
             try {
-                // Leer cantidad de vehículos (si está vacío, conserva valor por defecto)
-                if (!txtVehiculos.getText().trim().isEmpty()) {
-                    int cant = Integer.parseInt(txtVehiculos.getText().trim());
-                    if (cant < 20 || cant > 200) {
+                if (!modoXml && !txtVehiculos.getText().trim().isEmpty()) {
+                    int cantidad = Integer.parseInt(txtVehiculos.getText().trim());
+                    if (cantidad < 20 || cantidad > 200) {
                         lblError.setText("La cantidad de vehículos debe ser un entero entre 20 y 200.");
                         return;
                     }
-                    config.setCantidadVehiculos(cant);
+                    config.setCantidadVehiculos(cantidad);
                 }
 
-                // Leer tiempos de semáforo (si están vacíos, conserva valores por defecto)
-                if (!txtVerde.getText().trim().isEmpty()) {
+                if (!modoXml && !txtVerde.getText().trim().isEmpty()) {
                     int verde = Integer.parseInt(txtVerde.getText().trim());
                     if (verde <= 0) {
                         lblError.setText("La duración de la luz VERDE debe ser mayor a 0 segundos.");
@@ -158,7 +272,7 @@ public class SimuladorMain extends Application {
                     config.setDuracionVerdeSeg(verde);
                 }
 
-                if (!txtAmarillo.getText().trim().isEmpty()) {
+                if (!modoXml && !txtAmarillo.getText().trim().isEmpty()) {
                     int amarillo = Integer.parseInt(txtAmarillo.getText().trim());
                     if (amarillo <= 0) {
                         lblError.setText("La duración de la luz AMARILLO debe ser mayor a 0 segundos.");
@@ -167,7 +281,7 @@ public class SimuladorMain extends Application {
                     config.setDuracionAmarilloSeg(amarillo);
                 }
 
-                if (!txtRojo.getText().trim().isEmpty()) {
+                if (!modoXml && !txtRojo.getText().trim().isEmpty()) {
                     int rojo = Integer.parseInt(txtRojo.getText().trim());
                     if (rojo <= 0) {
                         lblError.setText("La duración de la luz ROJO debe ser mayor a 0 segundos.");
@@ -176,31 +290,28 @@ public class SimuladorMain extends Application {
                     config.setDuracionRojoSeg(rojo);
                 }
 
-                // Leer origen
                 boolean origenFijo = !"Aleatorio".equals(cmbModoOrigen.getValue());
                 config.setOrigenAleatorio(!origenFijo);
                 if (origenFijo) {
-                    int idxOrigen = cmbCoordOrigen.getSelectionModel().getSelectedIndex();
-                    if (idxOrigen < 0) {
+                    int indiceOrigen = cmbCoordOrigen.getSelectionModel().getSelectedIndex();
+                    if (indiceOrigen < 0) {
                         lblError.setText("Selecciona una coordenada válida para el punto de partida.");
                         return;
                     }
-                    config.setCoordOrigen(coordenadasSpawns.get(idxOrigen));
+                    config.setCoordOrigen(coordenadasSpawns.get(indiceOrigen));
                 }
 
-                // Leer destino
                 boolean destinoFijo = !"Aleatorio".equals(cmbModoDestino.getValue());
                 config.setDestinoAleatorio(!destinoFijo);
                 if (destinoFijo) {
-                    int idxDestino = cmbCoordDestino.getSelectionModel().getSelectedIndex();
-                    if (idxDestino < 0) {
+                    int indiceDestino = cmbCoordDestino.getSelectionModel().getSelectedIndex();
+                    if (indiceDestino < 0) {
                         lblError.setText("Selecciona una coordenada válida para el punto de llegada.");
                         return;
                     }
-                    config.setCoordDestino(coordenadasSpawns.get(idxDestino));
+                    config.setCoordDestino(coordenadasSpawns.get(indiceDestino));
                 }
 
-                // Validar que origen y destino fijos no sean el mismo punto
                 if (origenFijo && destinoFijo
                         && config.getCoordOrigen()[0] == config.getCoordDestino()[0]
                         && config.getCoordOrigen()[1] == config.getCoordDestino()[1]) {
@@ -208,8 +319,7 @@ public class SimuladorMain extends Application {
                     return;
                 }
 
-                iniciarSimulacion(stage, config);
-
+                iniciarSimulacion(stage, config, mapaActivo, modoXml ? definicionXml : null);
             } catch (NumberFormatException ex) {
                 lblError.setText("Ingresa únicamente números enteros válidos en los campos numéricos.");
             }
@@ -218,6 +328,10 @@ public class SimuladorMain extends Application {
         contenedor.getChildren().addAll(
                 titulo,
                 subtitulo,
+                crearEtiqueta("Fuente de configuración:"),
+                opcionesFuente,
+                selectorArchivo,
+                lblResumenXml,
                 crearEtiqueta("Cantidad de vehículos (20 - 200):"),
                 txtVehiculos,
                 crearEtiqueta("Duración de luces del semáforo (segundos):"),
@@ -230,15 +344,45 @@ public class SimuladorMain extends Application {
                 boxBotones
         );
 
-        Scene menuScene = new Scene(contenedor, 480, 460);
+        ScrollPane desplazamiento = new ScrollPane(contenedor);
+        desplazamiento.setFitToWidth(true);
+        desplazamiento.setStyle("-fx-background: #232730; -fx-background-color: #232730;");
+        Scene menuScene = new Scene(desplazamiento, 540, 680);
         stage.setTitle("Menú Inicial - Simulador de Tráfico");
         stage.setScene(menuScene);
         stage.setOnCloseRequest(e -> System.exit(0));
         stage.show();
     }
 
-    private void iniciarSimulacion(Stage stage, ConfiguracionSimulacion config) {
-        Mapa miCiudad = new Mapa(diseñoCiudad, config);
+    private void actualizarComboSpawns(
+            ComboBox<String> cmbOrigen,
+            ComboBox<String> cmbDestino,
+            List<int[]> coordenadasSpawns) {
+        cmbOrigen.getItems().clear();
+        cmbDestino.getItems().clear();
+        for (int[] coordenada : coordenadasSpawns) {
+            String texto = formatearCoordenada(coordenada);
+            cmbOrigen.getItems().add(texto);
+            cmbDestino.getItems().add(texto);
+        }
+        if (!cmbOrigen.getItems().isEmpty()) {
+            cmbOrigen.getSelectionModel().select(0);
+        }
+        if (cmbDestino.getItems().size() > 1) {
+            cmbDestino.getSelectionModel().select(1);
+        } else if (!cmbDestino.getItems().isEmpty()) {
+            cmbDestino.getSelectionModel().select(0);
+        }
+    }
+
+    private void iniciarSimulacion(
+            Stage stage,
+            ConfiguracionSimulacion config,
+            int[][] diseño,
+            DefinicionSimulacion definicionXml) {
+        Mapa miCiudad = definicionXml == null
+                ? new Mapa(diseño, config)
+                : new Mapa(definicionXml);
 
         if (miCiudad.getPuntosSpawn().size() < 2) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "Se requieren al menos 2 Spawns para iniciar.");
@@ -252,7 +396,9 @@ public class SimuladorMain extends Application {
         List<Vehiculo> vehiculos = new CopyOnWriteArrayList<>();
 
         PanelCiudadFX panelCiudad = new PanelCiudadFX(miCiudad, vehiculos);
-        BorderPane root = new BorderPane(panelCiudad);
+        ScrollPane vistaMapa = new ScrollPane(panelCiudad);
+        vistaMapa.setPannable(true);
+        BorderPane root = new BorderPane(vistaMapa);
 
         Scene scene = new Scene(root);
         stage.setTitle("Simulador de Tráfico JavaFX - (" + config.getCantidadVehiculos() + " vehículos)");
@@ -270,7 +416,7 @@ public class SimuladorMain extends Application {
     private List<int[]> obtenerCoordenadasSpawns(int[][] matriz) {
         List<int[]> lista = new ArrayList<>();
         for (int i = 0; i < matriz.length; i++) {
-            for (int j = 0; j < matriz[0].length; j++) {
+            for (int j = 0; j < matriz[i].length; j++) {
                 if (matriz[i][j] == 8) {
                     lista.add(new int[]{i, j});
                 }
@@ -284,10 +430,10 @@ public class SimuladorMain extends Application {
     }
 
     private Label crearEtiqueta(String texto) {
-        Label lbl = new Label(texto);
-        lbl.setTextFill(Color.WHITE);
-        lbl.setFont(Font.font("System", FontWeight.BOLD, 12));
-        return lbl;
+        Label etiqueta = new Label(texto);
+        etiqueta.setTextFill(Color.WHITE);
+        etiqueta.setFont(Font.font("System", FontWeight.BOLD, 12));
+        return etiqueta;
     }
 
     public static void main(String[] args) {
