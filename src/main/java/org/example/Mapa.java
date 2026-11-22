@@ -8,16 +8,32 @@ public class Mapa {
     private int columnas;
     private List<PuntoGeneracion> puntosSpawn = new ArrayList<>();
     private final ConfiguracionSimulacion config;
+    private final Map<CoordenadaMapa, String> configuracionesPorInterseccion;
 
     public Mapa(int[][] matrizDiseño) {
         this(matrizDiseño, new ConfiguracionSimulacion());
     }
 
     public Mapa(int[][] matrizDiseño, ConfiguracionSimulacion config) {
+        this(matrizDiseño, config, Map.of());
+    }
+
+    public Mapa(DefinicionSimulacion definicion) {
+        this(
+                definicion.getDiseñoCiudad(),
+                definicion.getConfiguracion(),
+                definicion.getConfiguracionesPorInterseccion());
+    }
+
+    private Mapa(
+            int[][] matrizDiseño,
+            ConfiguracionSimulacion config,
+            Map<CoordenadaMapa, String> configuracionesPorInterseccion) {
         this.filas = matrizDiseño.length;
         this.columnas = matrizDiseño[0].length;
         this.cuadricula = new Celda[filas][columnas];
         this.config = config;
+        this.configuracionesPorInterseccion = Map.copyOf(configuracionesPorInterseccion);
         construirDesdeMatriz(matrizDiseño);
     }
 
@@ -34,12 +50,21 @@ public class Mapa {
                     case 5: cuadricula[i][j] = new CalleDobleSentido(i, j, "HORIZONTAL"); break;
                     case 6: cuadricula[i][j] = new CalleDobleSentido(i, j, "VERTICAL"); break;
                     case 7: // INTERSECCIÓN
-                        Semaforo sem = new Semaforo(
-                                config.getDuracionVerdeSeg(),
-                                config.getDuracionAmarilloSeg(),
-                                config.getDuracionRojoSeg()
-                        );
-                        new Thread(sem).start();
+                        CoordenadaMapa coordenada = new CoordenadaMapa(i, j);
+                        String idConfiguracion = configuracionesPorInterseccion.get(coordenada);
+                        ConfiguracionSemaforo configSemaforo = idConfiguracion == null
+                                ? null
+                                : config.getConfiguracionesSemaforo().get(idConfiguracion);
+                        if (idConfiguracion != null && configSemaforo == null) {
+                            throw new IllegalArgumentException(
+                                    "No existe la configuración de semáforo '" + idConfiguracion + "'.");
+                        }
+                        Semaforo sem = configSemaforo == null
+                                ? new Semaforo(config)
+                                : new Semaforo(configSemaforo);
+                        Thread hiloSemaforo = new Thread(sem, "Semaforo-" + i + "-" + j);
+                        hiloSemaforo.setDaemon(true);
+                        hiloSemaforo.start();
                         cuadricula[i][j] = new Interseccion(i, j, sem);
                         break;
                     case 8: // PUNTO DE GENERACIÓN

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map>
+    <config>
+        <shape height="12" width="12"/>
+        <cars max="50"/>
+            <!--
+                "forced-yellow-duration" is the fixed time
+                (in seconds) that all traffic lights will
+                be yellow before turning red.
+
+
+                "forced-red-duration" is the fixed time
+                (also in seconds) that all traffic lights
+                in a given intersection will be red before
+                changing stage.
+            -->
+        <phase-config id="4-phase" forced-yellow-duration="2" forced-red-duration="1">
+            <!--
+                "duration" is a positive number of seconds.
+                "dynamic" is not currently supported.
+            -->
+            <phase open-directions="north" duration="10"/>
+            <phase open-directions="south" duration="5"/>
+            <phase open-directions="east" duration="5"/>
+            <phase open-directions="west" duration="5"/>
+        </phase-config>
+        <phase-config id="2-phase" forced-yellow-duration="2" forced-red-duration="1">
+            <phase open-directions="north south" duration="10"/>
+            <phase open-directions="east west" duration="5"/>
+        </phase-config>
+    </config>
+    <nodes>
+        <node id="S0" x="3" y="0" type="spawn"/>
+        <node id="S1" x="0" y="4" type="spawn"/>
+        <node id="S2" x="11" y="4" type="spawn"/>
+        <node id="S3" x="3" y="11" type="spawn"/>
+        <node id="S4" x="0" y="8" type="spawn"/>
+        <node id="I0" x="3" y="4" type="intersection" phase-config="4-phase"/>
+        <node id="I1" x="3" y="8" type="intersection" phase-config="2-phase"/>
+    </nodes>
+    <edges>
+        <edge from="S0" to="I0" type="two-way"/>
+        <edge from="S1" to="I0" type="two-way"/>
+        <edge from="S2" to="I0" type="two-way"/>
+        <edge from="S3" to="I0" type="two-way"/>
+        <edge from="S4" to="I1" type="two-way"/>
+        <edge from="I0" to="I1" type="two-way"/>
+        <edge from="S3" to="I1" type="two-way"/>
+    </edges>
+</map>

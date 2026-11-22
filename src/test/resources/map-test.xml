@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map>
+    <config>
+        <shape height="5" width="7"/>
+        <cars max="33"/>
+        <phase-config id="four-phase" forced-yellow-duration="3" forced-red-duration="1">
+            <phase open-directions="north" duration="10"/>
+            <phase open-directions="south" duration="5"/>
+            <phase open-directions="east" duration="5"/>
+            <phase open-directions="west" duration="5"/>
+        </phase-config>
+        <phase-config id="two-phase" forced-yellow-duration="2" forced-red-duration="4">
+            <phase open-directions="north south" duration="10"/>
+            <phase open-directions="east west" duration="5"/>
+        </phase-config>
+    </config>
+    <nodes>
+        <node id="S0" x="0" y="0" type="spawn"/>
+        <node id="N0" x="0" y="2" type="intersection" phase-config="four-phase"/>
+        <node id="N1" x="4" y="2" type="intersection" phase-config="two-phase"/>
+        <node id="S1" x="4" y="4" type="spawn"/>
+    </nodes>
+    <edges>
+        <edge from="S0" to="N0" type="one-way"/>
+        <edge from="N0" to="N1" type="two-way"/>
+        <edge from="N1" to="S1" type="two-way"/>
+    </edges>
+</map>
