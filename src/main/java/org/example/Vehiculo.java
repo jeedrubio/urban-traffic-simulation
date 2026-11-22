@@ -3,6 +3,7 @@ package org.example;
 import javafx.scene.paint.Color;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Vehiculo implements Runnable {
     private static final Color[] PALETA = {
@@ -20,6 +21,11 @@ public class Vehiculo implements Runnable {
     private volatile int secFila = 0; // 0 = Arriba, 1 = Abajo
     private volatile int secCol = 0;  // 0 = Izquierda, 1 = Derecha
     private volatile int carrilUnSentido = 0;
+
+    // Métricas individuales del vehículo
+    private long tiempoInicioMs = 0;
+    private long tiempoFinMs = 0;
+    private final AtomicLong tiempoEsperaSemaforoMs = new AtomicLong(0);
 
     public Vehiculo(String id, List<Celda> ruta, int tiempoCruce) {
         this.id = id;
@@ -43,6 +49,36 @@ public class Vehiculo implements Runnable {
         this.secCol = col;
     }
 
+    public void agregarTiempoEsperaSemaforo(long ms) {
+        this.tiempoEsperaSemaforoMs.addAndGet(ms);
+    }
+
+    public long getTiempoTotalMs() {
+        return Math.max(0, tiempoFinMs - tiempoInicioMs);
+    }
+
+    public long getTiempoEsperaSemaforoMs() {
+        return tiempoEsperaSemaforoMs.get();
+    }
+
+    public double getPorcentajeEspera() {
+        long total = getTiempoTotalMs();
+        if (total <= 0) return 0.0;
+        return Math.min(100.0, (tiempoEsperaSemaforoMs.get() * 100.0) / total);
+    }
+
+    public String getCoordenadaOrigen() {
+        if (ruta == null || ruta.isEmpty()) return "(?,?)";
+        Celda c = ruta.get(0);
+        return "(" + c.x + "," + c.y + ")";
+    }
+
+    public String getCoordenadaDestino() {
+        if (ruta == null || ruta.isEmpty()) return "(?,?)";
+        Celda c = ruta.get(ruta.size() - 1);
+        return "(" + c.x + "," + c.y + ")";
+    }
+
     private String calcularDireccion(Celda origen, Celda destino) {
         if (destino.x < origen.x) return "NORTE";
         if (destino.x > origen.x) return "SUR";
@@ -57,6 +93,7 @@ public class Vehiculo implements Runnable {
     @Override
     public void run() {
         Celda ocupada = null;
+        this.tiempoInicioMs = System.currentTimeMillis();
         try {
             if (ruta == null || ruta.isEmpty()) return;
 
@@ -74,29 +111,27 @@ public class Vehiculo implements Runnable {
             for (int i = 1; i < ruta.size(); i++) {
                 Celda siguiente = ruta.get(i);
 
-                // Mantiene dirección de entrada mientras espera semáforo o sección libre
                 this.direccionMovimiento = calcularDireccion(ocupada, siguiente);
-
-                // Entra a la primera sección de 'siguiente' antes de soltar 'ocupada'
                 siguiente.entrar(this);
 
                 ocupada.salir(this);
                 ocupada = siguiente;
                 this.celdaActual = siguiente;
 
-                // Si es intersección, gira hacia el siguiente tramo ya estando dentro
                 if (siguiente instanceof Interseccion && i + 1 < ruta.size()) {
                     this.direccionMovimiento = calcularDireccion(siguiente, ruta.get(i + 1));
                     Thread.sleep(tiempoCruce);
                 } else {
-                    // Primera mitad de la casilla (ej. inferior izquierda si va al ESTE)
                     Thread.sleep(tiempoCruce / 2);
-
-                    // Avanza a la segunda mitad de la casilla (ej. inferior derecha si va al ESTE)
                     siguiente.avanzarDentroDeCelda(this);
                     Thread.sleep(tiempoCruce / 2);
                 }
             }
+
+            // 3. Registrar finalización exitosa y métricas de viaje
+            this.tiempoFinMs = System.currentTimeMillis();
+            GestorMetricas.getInstancia().registrarLlegada(this);
+
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {

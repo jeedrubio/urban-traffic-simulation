@@ -1,6 +1,9 @@
 package org.example;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -11,12 +14,14 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SimuladorMain extends Application {
@@ -380,6 +385,10 @@ public class SimuladorMain extends Application {
             ConfiguracionSimulacion config,
             int[][] diseño,
             DefinicionSimulacion definicionXml) {
+        // Reiniciar el gestor ANTES de crear el mapa para que registre todas las intersecciones
+        GestorMetricas gestor = GestorMetricas.getInstancia();
+        gestor.reiniciar(config.getCantidadVehiculos());
+
         Mapa miCiudad = definicionXml == null
                 ? new Mapa(diseño, config)
                 : new Mapa(definicionXml);
@@ -400,6 +409,71 @@ public class SimuladorMain extends Application {
         vistaMapa.setPannable(true);
         BorderPane root = new BorderPane(vistaMapa);
 
+        // Panel lateral de monitoreo de métricas en tiempo real
+        VBox panelMetricas = new VBox(12);
+        panelMetricas.setPadding(new Insets(16));
+        panelMetricas.setPrefWidth(250);
+        panelMetricas.setStyle("-fx-background-color: #1e222a; -fx-border-color: #3a3f4b; -fx-border-width: 0 0 0 1;");
+
+        Label lblTituloMetricas = new Label("Métricas en Vivo");
+        lblTituloMetricas.setFont(Font.font("System", FontWeight.BOLD, 16));
+        lblTituloMetricas.setTextFill(Color.WHITE);
+
+        Label lblLlegados = crearDatoPanel("Llegados: 0 / " + config.getCantidadVehiculos());
+        Label lblPrimero = crearDatoPanel("Primero: Esperando...");
+        Label lblPromedio = crearDatoPanel("Tiempo prom.: 0.00 s");
+        Label lblEspera = crearDatoPanel("Espera semáf.: 0.0%");
+        Label lblCongestion = crearDatoPanel("Congestión máx.: 0");
+        Label lblEstado = crearDatoPanel("Estado: Simulando...");
+        lblEstado.setTextFill(Color.LIGHTGREEN);
+
+        Button btnVerTabla = new Button("Ver Tabla de Métricas");
+        btnVerTabla.setMaxWidth(Double.MAX_VALUE);
+        btnVerTabla.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
+        btnVerTabla.setOnAction(e -> VentanaMetricasFX.mostrar(gestor));
+
+        panelMetricas.getChildren().addAll(
+                lblTituloMetricas,
+                new Separator(),
+                lblEstado,
+                lblLlegados,
+                lblPrimero,
+                lblPromedio,
+                lblEspera,
+                lblCongestion,
+                new Separator(),
+                btnVerTabla
+        );
+        root.setRight(panelMetricas);
+
+        Runnable refrescarPanelLateral = () -> {
+            lblLlegados.setText("Llegados: " + gestor.getTotalLlegados() + " / " + gestor.getTotalEsperados());
+            lblPromedio.setText(String.format(Locale.US, "Tiempo prom.: %.2f s", gestor.getTiempoPromedioViajeSeg()));
+            lblEspera.setText(String.format(Locale.US, "Espera semáf.: %.1f%%", gestor.getPorcentajePromedioEspera()));
+
+            GestorMetricas.RegistroVehiculo primero = gestor.getPrimeroEnLlegar();
+            if (primero != null) {
+                lblPrimero.setText(String.format(Locale.US, "Primero: %s (%.2f s)", primero.getId(), primero.getTiempoTotalSeg()));
+            }
+
+            Interseccion maxInter = gestor.getInterseccionMasCongestionada();
+            if (maxInter != null && maxInter.getMaxCongestion() > 0) {
+                lblCongestion.setText("Congestión máx.: " + maxInter.getMaxCongestion() + " en " + maxInter.getCoordenadaTexto());
+            }
+        };
+
+        Timeline actualizadorMetricas = new Timeline(new KeyFrame(Duration.millis(500), e -> refrescarPanelLateral.run()));
+        actualizadorMetricas.setCycleCount(Timeline.INDEFINITE);
+        actualizadorMetricas.play();
+
+        gestor.setAlFinalizarSimulacion(() -> Platform.runLater(() -> {
+            refrescarPanelLateral.run();
+            lblEstado.setText("Estado: Finalizada");
+            lblEstado.setTextFill(Color.GOLD);
+            actualizadorMetricas.stop();
+            VentanaMetricasFX.mostrar(gestor);
+        }));
+
         Scene scene = new Scene(root);
         stage.setTitle("Simulador de Tráfico JavaFX - (" + config.getCantidadVehiculos() + " vehículos)");
         stage.setScene(scene);
@@ -411,6 +485,14 @@ public class SimuladorMain extends Application {
         Thread hiloGenerador = new Thread(generador);
         hiloGenerador.setDaemon(true);
         hiloGenerador.start();
+    }
+
+    private Label crearDatoPanel(String texto) {
+        Label lbl = new Label(texto);
+        lbl.setTextFill(Color.LIGHTGRAY);
+        lbl.setFont(Font.font("System", 13));
+        lbl.setWrapText(true);
+        return lbl;
     }
 
     private List<int[]> obtenerCoordenadasSpawns(int[][] matriz) {

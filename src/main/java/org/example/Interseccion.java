@@ -4,27 +4,29 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
-
-//La intersección actua como semáforo,
-
+// La intersección actúa como semáforo y zona crítica protegida por Mutex
 public class Interseccion extends Celda {
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Semaforo semaforo;
 
+    // Métricas de congestión seguras para múltiples hilos
+    private final AtomicInteger vehiculosEnEspera = new AtomicInteger(0);
+    private final AtomicInteger maxCongestion = new AtomicInteger(0);
+    private final AtomicInteger totalCruces = new AtomicInteger(0);
+
     public Interseccion(int x, int y, Semaforo semaforo) {
         super(x, y, true);
         this.semaforo = semaforo;
+        GestorMetricas.getInstancia().registrarInterseccion(this);
     }
 
-
-    // En la intersección se puede salir y entrar desde cualquier dirección, pero sólo si el semáforo está en verde,
-    // en caso de que no, manda un sleep.
-
-    //Cada intersección tiene dos semáforos, uno para vertical y otro para hhorizontal,
-    //solo los carros pueden entrar de manera hhorizontal cuando esta en verde el semafotro
-    //horizontal y viceversa
+    public int getVehiculosEnEspera() { return vehiculosEnEspera.get(); }
+    public int getMaxCongestion() { return maxCongestion.get(); }
+    public int getTotalCruces() { return totalCruces.get(); }
+    public String getCoordenadaTexto() { return "(" + x + ", " + y + ")"; }
 
     @Override
     public boolean puedeSalirHacia(String dir) { return true; }
@@ -39,14 +41,35 @@ public class Interseccion extends Celda {
 
     @Override
     public void entrar(Vehiculo v) throws InterruptedException {
-        if (semaforo != null) {
-            String dir = v.getDireccionMovimiento();
-            while (!"VERDE".equals(semaforo.getEstadoPorDireccion(dir))) {
-                Thread.sleep(50);
+        int actuales = vehiculosEnEspera.incrementAndGet();
+        maxCongestion.accumulateAndGet(actuales, Math::max);
+        boolean contandoEspera = true;
+
+        long inicioEspera = System.currentTimeMillis();
+        try {
+            if (semaforo != null) {
+                String dir = v.getDireccionMovimiento();
+                while (!"VERDE".equals(semaforo.getEstadoPorDireccion(dir))) {
+                    Thread.sleep(50);
+                }
+            }
+
+            // Solicita el lock de forma interrumpible para garantizar limpieza del contador
+            lock.lockInterruptibly();
+            long tiempoDetenido = System.currentTimeMillis() - inicioEspera;
+            if (tiempoDetenido > 0) {
+                v.agregarTiempoEsperaSemaforo(tiempoDetenido);
+            }
+
+            vehiculosEnEspera.decrementAndGet();
+            contandoEspera = false;
+            totalCruces.incrementAndGet();
+            v.setSeccionActual(0, 0);
+        } finally {
+            if (contandoEspera) {
+                vehiculosEnEspera.decrementAndGet();
             }
         }
-        lock.lock();
-        v.setSeccionActual(0, 0);
     }
 
     @Override
@@ -77,6 +100,14 @@ public class Interseccion extends Celda {
             gc.fillOval(px + tamano - radio - 8, py + tamano - radio - 8, radio, radio);
             gc.setFill(Color.WHITE);
             gc.fillText("V", px + tamano - radio - 8 + radio * 0.30, py + tamano - radio - 8 + radio * 0.72);
+        }
+
+        // Muestra la cantidad de autos esperando si hay congestión en el cruce
+        int cola = vehiculosEnEspera.get();
+        if (cola > 0) {
+            gc.setFill(Color.GOLD);
+            gc.setFont(Font.font("System", FontWeight.BOLD, 11));
+            gc.fillText("Q:" + cola, px + tamano - 26, py + 16);
         }
     }
 
