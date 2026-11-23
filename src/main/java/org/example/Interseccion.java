@@ -4,13 +4,19 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 // La intersección actúa como semáforo y zona crítica protegida por Mutex
 public class Interseccion extends Celda {
+    public enum Lado {
+        NORTE, SUR, ESTE, OESTE
+    }
+
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Semaforo semaforo;
+    private final Set<Lado> ladosConectados;
 
     // Métricas de congestión seguras para múltiples hilos
     private final AtomicInteger vehiculosEnEspera = new AtomicInteger(0);
@@ -18,8 +24,13 @@ public class Interseccion extends Celda {
     private final AtomicInteger totalCruces = new AtomicInteger(0);
 
     public Interseccion(int x, int y, Semaforo semaforo) {
+        this(x, y, semaforo, Set.of());
+    }
+
+    public Interseccion(int x, int y, Semaforo semaforo, Set<Lado> ladosConectados) {
         super(x, y, true);
         this.semaforo = semaforo;
+        this.ladosConectados = Set.copyOf(ladosConectados);
         GestorMetricas.getInstancia().registrarInterseccion(this);
     }
 
@@ -27,6 +38,7 @@ public class Interseccion extends Celda {
     public int getMaxCongestion() { return maxCongestion.get(); }
     public int getTotalCruces() { return totalCruces.get(); }
     public String getCoordenadaTexto() { return "(" + x + ", " + y + ")"; }
+    public Set<Lado> getLadosConectados() { return ladosConectados; }
 
     @Override
     public boolean puedeSalirHacia(String dir) { return true; }
@@ -88,18 +100,11 @@ public class Interseccion extends Celda {
         if (semaforo != null) {
             double radio = tamano * 0.18;
             gc.setFont(Font.font("System", FontWeight.BOLD, 11));
-
-            // Semáforo Horizontal (arriba izquierda)
-            gc.setFill(obtenerColor(semaforo.getEstadoHorizontal()));
-            gc.fillOval(px + 8, py + 8, radio, radio);
-            gc.setFill(Color.WHITE);
-            gc.fillText("H", px + 8 + radio * 0.30, py + 8 + radio * 0.72);
-
-            // Semáforo Vertical (abajo derecha)
-            gc.setFill(obtenerColor(semaforo.getEstadoVertical()));
-            gc.fillOval(px + tamano - radio - 8, py + tamano - radio - 8, radio, radio);
-            gc.setFill(Color.WHITE);
-            gc.fillText("V", px + tamano - radio - 8 + radio * 0.30, py + tamano - radio - 8 + radio * 0.72);
+            for (Lado lado : Lado.values()) {
+                if (ladosConectados.contains(lado)) {
+                    dibujarSemaforoLateral(gc, px, py, tamano, radio, lado);
+                }
+            }
         }
 
         // Muestra la cantidad de autos esperando si hay congestión en el cruce
@@ -109,6 +114,55 @@ public class Interseccion extends Celda {
             gc.setFont(Font.font("System", FontWeight.BOLD, 11));
             gc.fillText("Q:" + cola, px + tamano - 26, py + 16);
         }
+    }
+
+    private void dibujarSemaforoLateral(
+            GraphicsContext gc,
+            double px,
+            double py,
+            double tamano,
+            double diametro,
+            Lado lado) {
+        double margen = 4;
+        double x;
+        double y;
+        switch (lado) {
+            case NORTE -> {
+                x = px + (tamano - diametro) / 2;
+                y = py + margen;
+            }
+            case SUR -> {
+                x = px + (tamano - diametro) / 2;
+                y = py + tamano - diametro - margen;
+            }
+            case ESTE -> {
+                x = px + tamano - diametro - margen;
+                y = py + (tamano - diametro) / 2;
+            }
+            case OESTE -> {
+                x = px + margen;
+                y = py + (tamano - diametro) / 2;
+            }
+            default -> throw new IllegalStateException("Lado de intersección desconocido: " + lado);
+        }
+
+        gc.setFill(obtenerColor(semaforo.getEstadoPorDireccion(direccionDeEntrada(lado))));
+        gc.fillOval(x, y, diametro, diametro);
+        gc.setStroke(Color.WHITE);
+        gc.setLineWidth(1);
+        gc.strokeOval(x, y, diametro, diametro);
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("System", FontWeight.BOLD, 9));
+        gc.fillText(lado.name().substring(0, 1), x + diametro * 0.32, y + diametro * 0.69);
+    }
+
+    private String direccionDeEntrada(Lado lado) {
+        return switch (lado) {
+            case NORTE -> "SUR";
+            case SUR -> "NORTE";
+            case ESTE -> "OESTE";
+            case OESTE -> "ESTE";
+        };
     }
 
     private Color obtenerColor(String estado) {

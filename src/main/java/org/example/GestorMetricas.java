@@ -29,13 +29,55 @@ public class GestorMetricas {
         return INSTANCIA;
     }
 
-    public void reiniciar(int totalVehiculos) {
+    public synchronized void reiniciar(int totalVehiculos) {
         registros.clear();
         intersecciones.clear();
         contadorLlegadas.set(0);
         reporteFinalEmitido.set(false);
         this.totalVehiculosEsperados = totalVehiculos;
         this.alFinalizarSimulacion = null;
+    }
+
+    /**
+     * Incluye un vehículo adicional solicitado durante la simulación.
+     * Devuelve false si el reporte final ya se emitió.
+     */
+    public synchronized boolean registrarVehiculoAdicionalEsperado() {
+        if (reporteFinalEmitido.get() || totalVehiculosEsperados <= 0) {
+            return false;
+        }
+        totalVehiculosEsperados++;
+        return true;
+    }
+
+    /**
+     * Libera una reserva de vehículo adicional que no pudo crearse.
+     */
+    public void cancelarVehiculoAdicionalEsperado() {
+        Runnable callback = null;
+        boolean emitirReporte = false;
+        synchronized (this) {
+            if (reporteFinalEmitido.get()
+                    || totalVehiculosEsperados <= contadorLlegadas.get()) {
+                return;
+            }
+            totalVehiculosEsperados--;
+            if (contadorLlegadas.get() >= totalVehiculosEsperados
+                    && reporteFinalEmitido.compareAndSet(false, true)) {
+                emitirReporte = true;
+                callback = alFinalizarSimulacion;
+            }
+        }
+        if (emitirReporte) {
+            imprimirReporteConsola();
+            if (callback != null) {
+                callback.run();
+            }
+        }
+    }
+
+    public boolean estaFinalizada() {
+        return reporteFinalEmitido.get();
     }
 
     public void setAlFinalizarSimulacion(Runnable callback) {
@@ -49,25 +91,38 @@ public class GestorMetricas {
     }
 
     public void registrarLlegada(Vehiculo v) {
-        int orden = contadorLlegadas.incrementAndGet();
-        RegistroVehiculo registro = new RegistroVehiculo(
-                orden,
-                v.getId(),
-                v.getCoordenadaOrigen(),
-                v.getCoordenadaDestino(),
-                v.getTiempoTotalMs(),
-                v.getTiempoEsperaSemaforoMs(),
-                v.getPorcentajeEspera()
-        );
-        registros.add(registro);
+        Runnable callback = null;
+        boolean emitirReporte = false;
+        synchronized (this) {
+            int orden = contadorLlegadas.incrementAndGet();
+            RegistroVehiculo registro = new RegistroVehiculo(
+                    orden,
+                    v.getId(),
+                    v.getCoordenadaOrigen(),
+                    v.getCoordenadaDestino(),
+                    v.getTiempoTotalMs(),
+                    v.getTiempoEsperaSemaforoMs(),
+                    v.getPorcentajeEspera()
+            );
+            registros.add(registro);
 
-        // Cuando llega el último vehículo esperado, emite el reporte final automáticamente
-        if (totalVehiculosEsperados > 0
-                && orden >= totalVehiculosEsperados
-                && reporteFinalEmitido.compareAndSet(false, true)) {
+            // El alta de autos y la última llegada se serializan para evitar finalizar
+            // mientras se está aceptando un vehículo adicional.
+            if (totalVehiculosEsperados > 0
+                    && orden >= totalVehiculosEsperados
+                    && reporteFinalEmitido.compareAndSet(false, true)) {
+                emitirReporte = true;
+                callback = alFinalizarSimulacion;
+            }
+        }
+        emitirReporteFinal(emitirReporte, callback);
+    }
+
+    private void emitirReporteFinal(boolean emitirReporte, Runnable callback) {
+        if (emitirReporte) {
             imprimirReporteConsola();
-            if (alFinalizarSimulacion != null) {
-                alFinalizarSimulacion.run();
+            if (callback != null) {
+                callback.run();
             }
         }
     }

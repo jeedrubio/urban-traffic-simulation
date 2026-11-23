@@ -10,12 +10,6 @@ public class ConfiguracionSimulacion {
     private int duracionRojoSeg = 1; // Pausa de seguridad en rojo antes de cambiar de eje
     private Map<String, ConfiguracionSemaforo> configuracionesSemaforo = Map.of();
 
-    private boolean origenAleatorio = true;
-    private int[] coordOrigen = null; // [fila, col]
-
-    private boolean destinoAleatorio = true;
-    private int[] coordDestino = null; // [fila, col]
-
     public int getCantidadVehiculos() { return cantidadVehiculos; }
     public void setCantidadVehiculos(int cantidadVehiculos) { this.cantidadVehiculos = cantidadVehiculos; }
 
@@ -37,18 +31,6 @@ public class ConfiguracionSimulacion {
                 : Map.copyOf(configuracionesSemaforo);
     }
 
-    public boolean isOrigenAleatorio() { return origenAleatorio; }
-    public void setOrigenAleatorio(boolean origenAleatorio) { this.origenAleatorio = origenAleatorio; }
-
-    public int[] getCoordOrigen() { return coordOrigen; }
-    public void setCoordOrigen(int[] coordOrigen) { this.coordOrigen = coordOrigen; }
-
-    public boolean isDestinoAleatorio() { return destinoAleatorio; }
-    public void setDestinoAleatorio(boolean destinoAleatorio) { this.destinoAleatorio = destinoAleatorio; }
-
-    public int[] getCoordDestino() { return coordDestino; }
-    public void setCoordDestino(int[] coordDestino) { this.coordDestino = coordDestino; }
-
     public ConfiguracionSimulacion copiar() {
         ConfiguracionSimulacion copia = new ConfiguracionSimulacion();
         copia.setCantidadVehiculos(cantidadVehiculos);
@@ -56,10 +38,6 @@ public class ConfiguracionSimulacion {
         copia.setDuracionAmarilloSeg(duracionAmarilloSeg);
         copia.setDuracionRojoSeg(duracionRojoSeg);
         copia.setConfiguracionesSemaforo(configuracionesSemaforo);
-        copia.setOrigenAleatorio(origenAleatorio);
-        copia.setCoordOrigen(coordOrigen == null ? null : coordOrigen.clone());
-        copia.setDestinoAleatorio(destinoAleatorio);
-        copia.setCoordDestino(coordDestino == null ? null : coordDestino.clone());
         return copia;
     }
 }

@@ -65,7 +65,8 @@ public class Mapa {
                         Thread hiloSemaforo = new Thread(sem, "Semaforo-" + i + "-" + j);
                         hiloSemaforo.setDaemon(true);
                         hiloSemaforo.start();
-                        cuadricula[i][j] = new Interseccion(i, j, sem);
+                        cuadricula[i][j] = new Interseccion(
+                                i, j, sem, detectarLadosConectados(matriz, i, j));
                         break;
                     case 8: // PUNTO DE GENERACIÓN
                         PuntoGeneracion spawn = new PuntoGeneracion(i, j);
@@ -76,6 +77,30 @@ public class Mapa {
                 }
             }
         }
+    }
+
+    private Set<Interseccion.Lado> detectarLadosConectados(int[][] matriz, int fila, int columna) {
+        Set<Interseccion.Lado> lados = EnumSet.noneOf(Interseccion.Lado.class);
+        if (fila > 0 && esCalleConectada(matriz[fila - 1][columna], Interseccion.Lado.NORTE)) {
+            lados.add(Interseccion.Lado.NORTE);
+        }
+        if (fila < filas - 1 && esCalleConectada(matriz[fila + 1][columna], Interseccion.Lado.SUR)) {
+            lados.add(Interseccion.Lado.SUR);
+        }
+        if (columna < columnas - 1 && esCalleConectada(matriz[fila][columna + 1], Interseccion.Lado.ESTE)) {
+            lados.add(Interseccion.Lado.ESTE);
+        }
+        if (columna > 0 && esCalleConectada(matriz[fila][columna - 1], Interseccion.Lado.OESTE)) {
+            lados.add(Interseccion.Lado.OESTE);
+        }
+        return lados;
+    }
+
+    private boolean esCalleConectada(int tipoCelda, Interseccion.Lado lado) {
+        return switch (lado) {
+            case NORTE, SUR -> tipoCelda == 1 || tipoCelda == 2 || tipoCelda == 6;
+            case ESTE, OESTE -> tipoCelda == 3 || tipoCelda == 4 || tipoCelda == 5;
+        };
     }
 
     public PuntoGeneracion buscarSpawnPorCoordenada(int fila, int col) {

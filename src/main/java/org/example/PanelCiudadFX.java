@@ -7,13 +7,20 @@ import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 
 public class PanelCiudadFX extends Pane {
     private final Mapa mapa;
     private final List<Vehiculo> vehiculos;
     private final double TAMANO_CELDA = 110.0;
     private final Canvas canvas;
+    private volatile Set<PuntoGeneracion> spawnsResaltados = Set.of();
+    private volatile Set<PuntoGeneracion> destinosResaltados = Set.of();
+    private volatile PuntoGeneracion origenSeleccionado;
+    private Consumer<PuntoGeneracion> alHacerClicEnSpawn;
 
     public PanelCiudadFX(Mapa mapa, List<Vehiculo> vehiculos) {
         this.mapa = mapa;
@@ -24,6 +31,16 @@ public class PanelCiudadFX extends Pane {
 
         this.canvas = new Canvas(ancho, alto);
         getChildren().add(canvas);
+        canvas.setOnMouseClicked(event -> {
+            int columna = (int) (event.getX() / TAMANO_CELDA);
+            int fila = (int) (event.getY() / TAMANO_CELDA);
+            if (fila >= 0 && fila < mapa.getFilas()
+                    && columna >= 0 && columna < mapa.getColumnas()
+                    && mapa.getCelda(fila, columna) instanceof PuntoGeneracion spawn
+                    && alHacerClicEnSpawn != null) {
+                alHacerClicEnSpawn.accept(spawn);
+            }
+        });
 
         AnimationTimer timer = new AnimationTimer() {
             @Override
@@ -42,6 +59,9 @@ public class PanelCiudadFX extends Pane {
             for (int j = 0; j < mapa.getColumnas(); j++) {
                 Celda celda = mapa.getCelda(i, j);
                 celda.dibujar(gc, j * TAMANO_CELDA, i * TAMANO_CELDA, TAMANO_CELDA);
+                if (celda instanceof PuntoGeneracion spawn) {
+                    dibujarResaltadoSpawn(gc, spawn);
+                }
             }
         }
 
@@ -54,6 +74,53 @@ public class PanelCiudadFX extends Pane {
 
             dibujarVehiculoDetallado(gc, v, baseX, baseY);
         }
+    }
+
+    public void setAlHacerClicEnSpawn(Consumer<PuntoGeneracion> callback) {
+        this.alHacerClicEnSpawn = callback;
+    }
+
+    public void mostrarSeleccionSpawns(
+            Collection<PuntoGeneracion> spawns,
+            Collection<PuntoGeneracion> destinos,
+            PuntoGeneracion origen) {
+        this.spawnsResaltados = Set.copyOf(spawns);
+        this.destinosResaltados = Set.copyOf(destinos);
+        this.origenSeleccionado = origen;
+    }
+
+    public void limpiarSeleccionSpawns() {
+        spawnsResaltados = Set.of();
+        destinosResaltados = Set.of();
+        origenSeleccionado = null;
+    }
+
+    private void dibujarResaltadoSpawn(GraphicsContext gc, PuntoGeneracion spawn) {
+        Color color;
+        String etiqueta;
+        if (spawn == origenSeleccionado) {
+            color = Color.LIMEGREEN;
+            etiqueta = "ORIGEN";
+        } else if (destinosResaltados.contains(spawn)) {
+            color = Color.GOLD;
+            etiqueta = "DESTINO";
+        } else if (spawnsResaltados.contains(spawn)) {
+            color = Color.DEEPSKYBLUE;
+            etiqueta = "ORIGEN";
+        } else {
+            return;
+        }
+
+        double px = spawn.y * TAMANO_CELDA;
+        double py = spawn.x * TAMANO_CELDA;
+        gc.setFill(Color.color(color.getRed(), color.getGreen(), color.getBlue(), 0.24));
+        gc.fillRect(px + 3, py + 3, TAMANO_CELDA - 6, TAMANO_CELDA - 6);
+        gc.setStroke(color);
+        gc.setLineWidth(4);
+        gc.strokeRect(px + 4, py + 4, TAMANO_CELDA - 8, TAMANO_CELDA - 8);
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("System", FontWeight.BOLD, 11));
+        gc.fillText(etiqueta, px + 8, py + 18);
     }
 
     private void dibujarVehiculoDetallado(GraphicsContext gc, Vehiculo v, double baseX, double baseY) {

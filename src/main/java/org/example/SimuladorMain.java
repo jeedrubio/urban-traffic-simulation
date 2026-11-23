@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SimuladorMain extends Application {
@@ -129,26 +130,6 @@ public class SimuladorMain extends Application {
 
         HBox boxSemaforos = new HBox(10, txtVerde, txtAmarillo, txtRojo);
 
-        ComboBox<String> cmbModoOrigen = new ComboBox<>();
-        cmbModoOrigen.getItems().addAll("Aleatorio", "Elegir punto");
-        cmbModoOrigen.setValue("Aleatorio");
-
-        ComboBox<String> cmbCoordOrigen = new ComboBox<>();
-        cmbCoordOrigen.setDisable(true);
-        cmbModoOrigen.setOnAction(
-                e -> cmbCoordOrigen.setDisable("Aleatorio".equals(cmbModoOrigen.getValue())));
-        HBox boxOrigen = new HBox(10, cmbModoOrigen, cmbCoordOrigen);
-
-        ComboBox<String> cmbModoDestino = new ComboBox<>();
-        cmbModoDestino.getItems().addAll("Aleatorio", "Elegir punto");
-        cmbModoDestino.setValue("Aleatorio");
-
-        ComboBox<String> cmbCoordDestino = new ComboBox<>();
-        cmbCoordDestino.setDisable(true);
-        cmbModoDestino.setOnAction(
-                e -> cmbCoordDestino.setDisable("Aleatorio".equals(cmbModoDestino.getValue())));
-        HBox boxDestino = new HBox(10, cmbModoDestino, cmbCoordDestino);
-
         Label lblError = new Label();
         lblError.setTextFill(Color.SALMON);
         lblError.setWrapText(true);
@@ -159,18 +140,14 @@ public class SimuladorMain extends Application {
         HBox boxBotones = new HBox(12, btnIniciar);
         boxBotones.setAlignment(Pos.CENTER_RIGHT);
 
-        List<int[]> coordenadasSpawns = new ArrayList<>();
+        int[] cantidadSpawns = {0};
         Runnable actualizarModo = () -> {
             boolean modoXml = rbArchivoXml.isSelected();
             int[][] mapaActivo = modoXml
                     ? (definicionXml == null ? null : definicionXml.getDiseñoCiudad())
                     : diseñoCiudad;
 
-            coordenadasSpawns.clear();
-            if (mapaActivo != null) {
-                coordenadasSpawns.addAll(obtenerCoordenadasSpawns(mapaActivo));
-            }
-            actualizarComboSpawns(cmbCoordOrigen, cmbCoordDestino, coordenadasSpawns);
+            cantidadSpawns[0] = mapaActivo == null ? 0 : contarSpawns(mapaActivo);
 
             txtVehiculos.setDisable(modoXml);
             txtVerde.setDisable(modoXml);
@@ -198,7 +175,7 @@ public class SimuladorMain extends Application {
                 lblResumenXml.setText("");
             }
 
-            btnIniciar.setDisable(coordenadasSpawns.size() < 2 || (modoXml && definicionXml == null));
+            btnIniciar.setDisable(cantidadSpawns[0] < 2 || (modoXml && definicionXml == null));
         };
 
         rbManual.setOnAction(e -> {
@@ -248,7 +225,7 @@ public class SimuladorMain extends Application {
                 lblError.setText("Selecciona un archivo XML válido o cambia al modo manual.");
                 return;
             }
-            if (coordenadasSpawns.size() < 2) {
+            if (cantidadSpawns[0] < 2) {
                 lblError.setText("Se requieren al menos 2 Spawns para iniciar.");
                 return;
             }
@@ -295,35 +272,6 @@ public class SimuladorMain extends Application {
                     config.setDuracionRojoSeg(rojo);
                 }
 
-                boolean origenFijo = !"Aleatorio".equals(cmbModoOrigen.getValue());
-                config.setOrigenAleatorio(!origenFijo);
-                if (origenFijo) {
-                    int indiceOrigen = cmbCoordOrigen.getSelectionModel().getSelectedIndex();
-                    if (indiceOrigen < 0) {
-                        lblError.setText("Selecciona una coordenada válida para el punto de partida.");
-                        return;
-                    }
-                    config.setCoordOrigen(coordenadasSpawns.get(indiceOrigen));
-                }
-
-                boolean destinoFijo = !"Aleatorio".equals(cmbModoDestino.getValue());
-                config.setDestinoAleatorio(!destinoFijo);
-                if (destinoFijo) {
-                    int indiceDestino = cmbCoordDestino.getSelectionModel().getSelectedIndex();
-                    if (indiceDestino < 0) {
-                        lblError.setText("Selecciona una coordenada válida para el punto de llegada.");
-                        return;
-                    }
-                    config.setCoordDestino(coordenadasSpawns.get(indiceDestino));
-                }
-
-                if (origenFijo && destinoFijo
-                        && config.getCoordOrigen()[0] == config.getCoordDestino()[0]
-                        && config.getCoordOrigen()[1] == config.getCoordDestino()[1]) {
-                    lblError.setText("El punto de llegada no puede ser el mismo que el punto de partida.");
-                    return;
-                }
-
                 iniciarSimulacion(stage, config, mapaActivo, modoXml ? definicionXml : null);
             } catch (NumberFormatException ex) {
                 lblError.setText("Ingresa únicamente números enteros válidos en los campos numéricos.");
@@ -341,10 +289,6 @@ public class SimuladorMain extends Application {
                 txtVehiculos,
                 crearEtiqueta("Duración de luces del semáforo (segundos):"),
                 boxSemaforos,
-                crearEtiqueta("Punto de partida (Spawn):"),
-                boxOrigen,
-                crearEtiqueta("Punto de llegada (Destino):"),
-                boxDestino,
                 lblError,
                 boxBotones
         );
@@ -357,27 +301,6 @@ public class SimuladorMain extends Application {
         stage.setScene(menuScene);
         stage.setOnCloseRequest(e -> System.exit(0));
         stage.show();
-    }
-
-    private void actualizarComboSpawns(
-            ComboBox<String> cmbOrigen,
-            ComboBox<String> cmbDestino,
-            List<int[]> coordenadasSpawns) {
-        cmbOrigen.getItems().clear();
-        cmbDestino.getItems().clear();
-        for (int[] coordenada : coordenadasSpawns) {
-            String texto = formatearCoordenada(coordenada);
-            cmbOrigen.getItems().add(texto);
-            cmbDestino.getItems().add(texto);
-        }
-        if (!cmbOrigen.getItems().isEmpty()) {
-            cmbOrigen.getSelectionModel().select(0);
-        }
-        if (cmbDestino.getItems().size() > 1) {
-            cmbDestino.getSelectionModel().select(1);
-        } else if (!cmbDestino.getItems().isEmpty()) {
-            cmbDestino.getSelectionModel().select(0);
-        }
     }
 
     private void iniciarSimulacion(
@@ -404,6 +327,7 @@ public class SimuladorMain extends Application {
 
         List<Vehiculo> vehiculos = new CopyOnWriteArrayList<>();
 
+        GestorVehiculos gestorVehiculos = new GestorVehiculos(miCiudad, vehiculos, gestor);
         PanelCiudadFX panelCiudad = new PanelCiudadFX(miCiudad, vehiculos);
         ScrollPane vistaMapa = new ScrollPane(panelCiudad);
         vistaMapa.setPannable(true);
@@ -432,6 +356,114 @@ public class SimuladorMain extends Application {
         btnVerTabla.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
         btnVerTabla.setOnAction(e -> VentanaMetricasFX.mostrar(gestor));
 
+        Button btnAutoAleatorio = new Button("Agregar auto aleatorio");
+        btnAutoAleatorio.setMaxWidth(Double.MAX_VALUE);
+        btnAutoAleatorio.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
+
+        Button btnElegirRuta = new Button("Elegir ruta en el mapa");
+        btnElegirRuta.setMaxWidth(Double.MAX_VALUE);
+        btnElegirRuta.setStyle("-fx-background-color: #8e44ad; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
+
+        Label lblInstruccionRuta = crearDatoPanel("Los autos añadidos se suman a los configurados.");
+        lblInstruccionRuta.setTextFill(Color.LIGHTBLUE);
+
+        boolean[] seleccionRutaActiva = {false};
+        PuntoGeneracion[] origenSeleccionado = {null};
+        List<PuntoGeneracion> destinosSeleccionables = new ArrayList<>();
+        Runnable cancelarSeleccionRuta = () -> {
+            seleccionRutaActiva[0] = false;
+            origenSeleccionado[0] = null;
+            destinosSeleccionables.clear();
+            panelCiudad.limpiarSeleccionSpawns();
+            btnElegirRuta.setText("Elegir ruta en el mapa");
+        };
+
+        btnAutoAleatorio.setOnAction(e -> {
+            if (gestor.estaFinalizada()) {
+                lblInstruccionRuta.setText("La simulación ya finalizó.");
+                return;
+            }
+            if (seleccionRutaActiva[0]) {
+                cancelarSeleccionRuta.run();
+            }
+            lblInstruccionRuta.setText("Buscando una ruta aleatoria...");
+            observarCreacionVehiculo(
+                    gestorVehiculos.crearVehiculoAleatorio(true),
+                    lblInstruccionRuta,
+                    gestor,
+                    btnAutoAleatorio,
+                    btnElegirRuta,
+                    cancelarSeleccionRuta);
+        });
+
+        btnElegirRuta.setOnAction(e -> {
+            if (gestor.estaFinalizada()) {
+                lblInstruccionRuta.setText("La simulación ya finalizó.");
+                return;
+            }
+            if (seleccionRutaActiva[0]) {
+                cancelarSeleccionRuta.run();
+                lblInstruccionRuta.setText("Selección cancelada.");
+                return;
+            }
+            seleccionRutaActiva[0] = true;
+            origenSeleccionado[0] = null;
+            destinosSeleccionables.clear();
+            panelCiudad.mostrarSeleccionSpawns(miCiudad.getPuntosSpawn(), List.of(), null);
+            btnElegirRuta.setText("Cancelar selección");
+            lblInstruccionRuta.setText("Haz clic en el spawn que será el origen.");
+        });
+
+        panelCiudad.setAlHacerClicEnSpawn(spawn -> {
+            if (!seleccionRutaActiva[0] || gestor.estaFinalizada()) {
+                return;
+            }
+            if (origenSeleccionado[0] == null) {
+                origenSeleccionado[0] = spawn;
+                panelCiudad.mostrarSeleccionSpawns(List.of(), List.of(), spawn);
+                lblInstruccionRuta.setText("Buscando destinos alcanzables desde " + coordenada(spawn) + "...");
+                gestorVehiculos.obtenerDestinosAlcanzables(spawn).whenComplete((alcanzables, error) ->
+                        Platform.runLater(() -> {
+                            if (!seleccionRutaActiva[0] || origenSeleccionado[0] != spawn) {
+                                return;
+                            }
+                            if (error != null || alcanzables.isEmpty()) {
+                                origenSeleccionado[0] = null;
+                                panelCiudad.mostrarSeleccionSpawns(miCiudad.getPuntosSpawn(), List.of(), null);
+                                lblInstruccionRuta.setText("Ese origen no tiene destinos alcanzables. Elige otro spawn.");
+                                return;
+                            }
+                            destinosSeleccionables.clear();
+                            destinosSeleccionables.addAll(alcanzables);
+                            panelCiudad.mostrarSeleccionSpawns(List.of(), destinosSeleccionables, spawn);
+                            lblInstruccionRuta.setText("Origen " + coordenada(spawn)
+                                    + ". Haz clic en un spawn resaltado para elegir el destino.");
+                        }));
+                return;
+            }
+
+            if (destinosSeleccionables.isEmpty()) {
+                lblInstruccionRuta.setText("Calculando destinos; espera un momento...");
+                return;
+            }
+
+            if (!destinosSeleccionables.contains(spawn)) {
+                lblInstruccionRuta.setText("Elige uno de los destinos resaltados.");
+                return;
+            }
+            PuntoGeneracion origen = origenSeleccionado[0];
+            cancelarSeleccionRuta.run();
+            lblInstruccionRuta.setText("Creando auto para la ruta " + coordenada(origen)
+                    + " → " + coordenada(spawn) + "...");
+            observarCreacionVehiculo(
+                    gestorVehiculos.crearVehiculoEnRuta(origen, spawn, true),
+                    lblInstruccionRuta,
+                    gestor,
+                    btnAutoAleatorio,
+                    btnElegirRuta,
+                    cancelarSeleccionRuta);
+        });
+
         panelMetricas.getChildren().addAll(
                 lblTituloMetricas,
                 new Separator(),
@@ -442,7 +474,10 @@ public class SimuladorMain extends Application {
                 lblEspera,
                 lblCongestion,
                 new Separator(),
-                btnVerTabla
+                btnVerTabla,
+                btnAutoAleatorio,
+                btnElegirRuta,
+                lblInstruccionRuta
         );
         root.setRight(panelMetricas);
 
@@ -467,9 +502,13 @@ public class SimuladorMain extends Application {
         actualizadorMetricas.play();
 
         gestor.setAlFinalizarSimulacion(() -> Platform.runLater(() -> {
+            cancelarSeleccionRuta.run();
             refrescarPanelLateral.run();
             lblEstado.setText("Estado: Finalizada");
             lblEstado.setTextFill(Color.GOLD);
+            btnAutoAleatorio.setDisable(true);
+            btnElegirRuta.setDisable(true);
+            lblInstruccionRuta.setText("La simulación finalizó; ya no se pueden agregar autos.");
             actualizadorMetricas.stop();
             VentanaMetricasFX.mostrar(gestor);
         }));
@@ -481,10 +520,37 @@ public class SimuladorMain extends Application {
         stage.setOnCloseRequest(e -> System.exit(0));
         stage.show();
 
-        GeneradorTrafico generador = new GeneradorTrafico(miCiudad, vehiculos, config);
+        GeneradorTrafico generador = new GeneradorTrafico(gestorVehiculos, config);
         Thread hiloGenerador = new Thread(generador);
         hiloGenerador.setDaemon(true);
         hiloGenerador.start();
+    }
+
+    private void observarCreacionVehiculo(
+            CompletableFuture<Boolean> creacion,
+            Label lblInstruccion,
+            GestorMetricas gestor,
+            Button btnAutoAleatorio,
+            Button btnElegirRuta,
+            Runnable cancelarSeleccion) {
+        creacion.whenComplete((creado, error) -> Platform.runLater(() -> {
+            if (error != null) {
+                lblInstruccion.setText("No se pudo crear el auto: " + error.getMessage());
+            } else if (Boolean.TRUE.equals(creado)) {
+                lblInstruccion.setText("Auto agregado a la simulación.");
+            } else if (gestor.estaFinalizada()) {
+                lblInstruccion.setText("La simulación ya finalizó; no se agregó el auto.");
+            } else {
+                lblInstruccion.setText("No se encontró una ruta válida para crear el auto.");
+            }
+
+            if (gestor.estaFinalizada()) {
+                cancelarSeleccion.run();
+                btnAutoAleatorio.setDisable(true);
+                btnElegirRuta.setDisable(true);
+                lblInstruccion.setText("La simulación finalizó; ya no se pueden agregar autos.");
+            }
+        }));
     }
 
     private Label crearDatoPanel(String texto) {
@@ -495,20 +561,20 @@ public class SimuladorMain extends Application {
         return lbl;
     }
 
-    private List<int[]> obtenerCoordenadasSpawns(int[][] matriz) {
-        List<int[]> lista = new ArrayList<>();
+    private int contarSpawns(int[][] matriz) {
+        int cantidad = 0;
         for (int i = 0; i < matriz.length; i++) {
             for (int j = 0; j < matriz[i].length; j++) {
                 if (matriz[i][j] == 8) {
-                    lista.add(new int[]{i, j});
+                    cantidad++;
                 }
             }
         }
-        return lista;
+        return cantidad;
     }
 
-    private String formatearCoordenada(int[] coord) {
-        return "(" + coord[0] + ", " + coord[1] + ") - Fila " + coord[0] + ", Col " + coord[1];
+    private String coordenada(PuntoGeneracion spawn) {
+        return "(" + spawn.x + ", " + spawn.y + ")";
     }
 
     private Label crearEtiqueta(String texto) {
