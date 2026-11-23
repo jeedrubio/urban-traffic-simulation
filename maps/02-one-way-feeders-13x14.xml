@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map>
+    <config>
+        <shape height="13" width="14"/>
+        <cars max="95"/>
+
+        <phase-config id="eastbound-gate" forced-yellow-duration="2" forced-red-duration="1">
+            <phase open-directions="east" duration="7"/>
+        </phase-config>
+        <phase-config id="feeder-adaptive" forced-yellow-duration="2" forced-red-duration="1"
+                      min-green-duration="1" max-green-duration="10">
+            <phase open-directions="east" duration="dynamic"/>
+            <phase open-directions="south" duration="dynamic"/>
+        </phase-config>
+    </config>
+    <nodes>
+        <node id="WEST-UPPER" x="0" y="3" type="spawn"/>
+        <node id="WEST-MIDDLE" x="0" y="6" type="spawn"/>
+        <node id="WEST-LOWER" x="0" y="9" type="spawn"/>
+        <node id="NORTH-WEST" x="4" y="0" type="spawn"/>
+        <node id="NORTH-CENTER" x="8" y="0" type="spawn"/>
+        <node id="JUNCTION-W3" x="4" y="3" type="intersection" phase-config="feeder-adaptive"/>
+        <node id="JUNCTION-C3" x="8" y="3" type="intersection" phase-config="feeder-adaptive"/>
+        <node id="JUNCTION-W6" x="4" y="6" type="intersection" phase-config="feeder-adaptive"/>
+        <node id="JUNCTION-C6" x="8" y="6" type="intersection" phase-config="feeder-adaptive"/>
+        <node id="JUNCTION-E6" x="12" y="6" type="intersection" phase-config="eastbound-gate"/>
+        <node id="JUNCTION-W9" x="4" y="9" type="intersection" phase-config="feeder-adaptive"/>
+        <node id="JUNCTION-C9" x="8" y="9" type="intersection" phase-config="feeder-adaptive"/>
+        <node id="EAST-UPPER" x="13" y="3" type="destination"/>
+        <node id="EAST-MIDDLE" x="13" y="6" type="destination"/>
+        <node id="EAST-LOWER" x="13" y="9" type="destination"/>
+        <node id="SOUTH-WEST" x="4" y="12" type="destination"/>
+        <node id="SOUTH-CENTER" x="8" y="12" type="destination"/>
+    </nodes>
+    <edges>
+        <edge from="WEST-UPPER" to="JUNCTION-W3" type="one-way"/>
+        <edge from="JUNCTION-W3" to="JUNCTION-C3" type="one-way"/>
+        <edge from="JUNCTION-C3" to="EAST-UPPER" type="one-way"/>
+        <edge from="WEST-MIDDLE" to="JUNCTION-W6" type="one-way"/>
+        <edge from="JUNCTION-W6" to="JUNCTION-C6" type="one-way"/>
+        <edge from="JUNCTION-C6" to="JUNCTION-E6" type="one-way"/>
+        <edge from="JUNCTION-E6" to="EAST-MIDDLE" type="one-way"/>
+        <edge from="WEST-LOWER" to="JUNCTION-W9" type="one-way"/>
+        <edge from="JUNCTION-W9" to="JUNCTION-C9" type="one-way"/>
+        <edge from="JUNCTION-C9" to="EAST-LOWER" type="one-way"/>
+        <edge from="NORTH-WEST" to="JUNCTION-W3" type="one-way"/>
+        <edge from="JUNCTION-W3" to="JUNCTION-W6" type="one-way"/>
+        <edge from="JUNCTION-W6" to="JUNCTION-W9" type="one-way"/>
+        <edge from="JUNCTION-W9" to="SOUTH-WEST" type="one-way"/>
+        <edge from="NORTH-CENTER" to="JUNCTION-C3" type="one-way"/>
+        <edge from="JUNCTION-C3" to="JUNCTION-C6" type="one-way"/>
+        <edge from="JUNCTION-C6" to="JUNCTION-C9" type="one-way"/>
+        <edge from="JUNCTION-C9" to="SOUTH-CENTER" type="one-way"/>
+    </edges>
+</map>

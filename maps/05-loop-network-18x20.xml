@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map>
+    <config>
+        <shape height="18" width="20"/>
+        <cars max="190"/>
+
+        <phase-config id="loop-cardinal" forced-yellow-duration="2" forced-red-duration="1">
+            <phase open-directions="north" duration="7"/>
+            <phase open-directions="east" duration="7"/>
+            <phase open-directions="south" duration="7"/>
+            <phase open-directions="west" duration="7"/>
+        </phase-config>
+        <phase-config id="loop-axis" forced-yellow-duration="3" forced-red-duration="1">
+            <phase open-directions="north south" duration="14"/>
+            <phase open-directions="east west" duration="10"/>
+        </phase-config>
+        <phase-config id="loop-adaptive-axis" forced-yellow-duration="2" forced-red-duration="1"
+                      min-green-duration="2" max-green-duration="20">
+            <phase open-directions="north south" duration="dynamic"/>
+            <phase open-directions="east west" duration="dynamic"/>
+        </phase-config>
+        <phase-config id="loop-adaptive-four" forced-yellow-duration="2" forced-red-duration="2"
+                      min-green-duration="1" max-green-duration="12">
+            <phase open-directions="north" duration="dynamic"/>
+            <phase open-directions="east" duration="dynamic"/>
+            <phase open-directions="south" duration="dynamic"/>
+            <phase open-directions="west" duration="dynamic"/>
+        </phase-config>
+        <phase-config id="loop-three-stage" forced-yellow-duration="3" forced-red-duration="2">
+            <phase open-directions="east" duration="6"/>
+            <phase open-directions="west" duration="6"/>
+            <phase open-directions="north" duration="9"/>
+        </phase-config>
+    </config>
+    <nodes>
+        <node id="WEST-UPPER" x="0" y="3" type="spawn"/>
+        <node id="NORTH-CENTER" x="9" y="0" type="spawn"/>
+        <node id="WEST-CENTER" x="0" y="9" type="spawn-destination"/>
+        <node id="EAST-CENTER" x="19" y="9" type="destination"/>
+        <node id="SOUTH-CENTER" x="9" y="17" type="spawn-destination"/>
+        <node id="EAST-SOUTH" x="19" y="15" type="destination"/>
+        <node id="TOP-ARCADE" x="6" y="3" type="spawn-destination"/>
+        <node id="WEST-ARCADE" x="3" y="6" type="spawn-destination"/>
+        <node id="SOUTH-WEST-DEPOT" x="3" y="12" type="destination"/>
+        <node id="INNER-WEST" x="6" y="9" type="spawn-destination"/>
+        <node id="INNER-EAST" x="12" y="9" type="spawn-destination"/>
+        <node id="EAST-ARCADE" x="16" y="12" type="spawn-destination"/>
+        <node id="BOTTOM-ARCADE" x="13" y="15" type="spawn-destination"/>
+        <node id="SOUTH-DEPOT" x="16" y="17" type="spawn"/>
+        <node id="JUNCTION-NW" x="3" y="3" type="intersection" phase-config="loop-three-stage"/>
+        <node id="JUNCTION-NE" x="9" y="3" type="intersection" phase-config="loop-adaptive-four"/>
+        <node id="JUNCTION-CENTER" x="9" y="9" type="intersection" phase-config="loop-adaptive-axis"/>
+        <node id="JUNCTION-SW" x="3" y="9" type="intersection" phase-config="loop-cardinal"/>
+        <node id="JUNCTION-EAST" x="16" y="9" type="intersection" phase-config="loop-axis"/>
+        <node id="JUNCTION-SE" x="16" y="15" type="intersection" phase-config="loop-adaptive-four"/>
+        <node id="JUNCTION-SOUTH" x="9" y="15" type="intersection" phase-config="loop-cardinal"/>
+    </nodes>
+    <edges>
+        <edge from="WEST-UPPER" to="JUNCTION-NW" type="two-way"/>
+        <edge from="JUNCTION-NW" to="TOP-ARCADE" type="two-way"/>
+        <edge from="TOP-ARCADE" to="JUNCTION-NE" type="two-way"/>
+        <edge from="NORTH-CENTER" to="JUNCTION-NE" type="two-way"/>
+        <edge from="JUNCTION-NE" to="JUNCTION-CENTER" type="two-way"/>
+        <edge from="JUNCTION-CENTER" to="INNER-WEST" type="two-way"/>
+        <edge from="INNER-WEST" to="JUNCTION-SW" type="two-way"/>
+        <edge from="JUNCTION-SW" to="WEST-CENTER" type="two-way"/>
+        <edge from="JUNCTION-SW" to="WEST-ARCADE" type="two-way"/>
+        <edge from="WEST-ARCADE" to="JUNCTION-NW" type="two-way"/>
+        <edge from="JUNCTION-SW" to="SOUTH-WEST-DEPOT" type="two-way"/>
+        <edge from="JUNCTION-CENTER" to="INNER-EAST" type="two-way"/>
+        <edge from="INNER-EAST" to="JUNCTION-EAST" type="two-way"/>
+        <edge from="JUNCTION-EAST" to="EAST-CENTER" type="two-way"/>
+        <edge from="JUNCTION-EAST" to="EAST-ARCADE" type="two-way"/>
+        <edge from="EAST-ARCADE" to="JUNCTION-SE" type="two-way"/>
+        <edge from="JUNCTION-SE" to="EAST-SOUTH" type="two-way"/>
+        <edge from="JUNCTION-SE" to="SOUTH-DEPOT" type="two-way"/>
+        <edge from="JUNCTION-SE" to="BOTTOM-ARCADE" type="two-way"/>
+        <edge from="BOTTOM-ARCADE" to="JUNCTION-SOUTH" type="two-way"/>
+        <edge from="JUNCTION-SOUTH" to="SOUTH-CENTER" type="two-way"/>
+        <edge from="JUNCTION-SOUTH" to="JUNCTION-CENTER" type="two-way"/>
+    </edges>
+</map>
