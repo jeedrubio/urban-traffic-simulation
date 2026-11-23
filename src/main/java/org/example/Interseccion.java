@@ -5,6 +5,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -39,6 +40,13 @@ public class Interseccion extends Celda {
     public int getTotalCruces() { return totalCruces.get(); }
     public String getCoordenadaTexto() { return "(" + x + ", " + y + ")"; }
     public Set<Lado> getLadosConectados() { return ladosConectados; }
+    public int getCantidadFases() { return semaforo == null ? 0 : semaforo.getCantidadFases(); }
+
+    public CompletableFuture<Integer> solicitarCambioFaseManualmente() {
+        return semaforo == null
+                ? CompletableFuture.completedFuture(-1)
+                : semaforo.solicitarAvanceManual();
+    }
 
     @Override
     public boolean puedeSalirHacia(String dir) { return true; }

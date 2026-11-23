@@ -367,6 +367,9 @@ public class SimuladorMain extends Application {
         Label lblInstruccionRuta = crearDatoPanel("Los autos añadidos se suman a los configurados.");
         lblInstruccionRuta.setTextFill(Color.LIGHTBLUE);
 
+        Label lblFeedbackFase = crearDatoPanel("Pasa el cursor sobre un cruce y haz clic para cambiar su fase.");
+        lblFeedbackFase.setTextFill(Color.LIGHTGREEN);
+
         boolean[] seleccionRutaActiva = {false};
         PuntoGeneracion[] origenSeleccionado = {null};
         List<PuntoGeneracion> destinosSeleccionables = new ArrayList<>();
@@ -464,6 +467,29 @@ public class SimuladorMain extends Application {
                     cancelarSeleccionRuta);
         });
 
+        panelCiudad.setAlHacerClicEnInterseccion(interseccion -> {
+            if (interseccion.getCantidadFases() < 2) {
+                lblFeedbackFase.setText("La intersección " + interseccion.getCoordenadaTexto()
+                        + " solo tiene una fase configurada.");
+                return;
+            }
+
+            lblFeedbackFase.setText("Cambio solicitado en " + interseccion.getCoordenadaTexto()
+                    + "; se completarán las fases amarilla y roja.");
+            interseccion.solicitarCambioFaseManualmente().whenComplete((indiceFase, error) ->
+                    Platform.runLater(() -> {
+                        if (error != null) {
+                            lblFeedbackFase.setText("No se pudo cambiar la fase: " + error.getMessage());
+                        } else if (indiceFase != null && indiceFase >= 0) {
+                            lblFeedbackFase.setText("Intersección " + interseccion.getCoordenadaTexto()
+                                    + ": fase " + (indiceFase + 1)
+                                    + " activa; continúa el control configurado.");
+                        } else {
+                            lblFeedbackFase.setText("La intersección no tiene una fase alternativa.");
+                        }
+                    }));
+        });
+
         panelMetricas.getChildren().addAll(
                 lblTituloMetricas,
                 new Separator(),
@@ -477,7 +503,8 @@ public class SimuladorMain extends Application {
                 btnVerTabla,
                 btnAutoAleatorio,
                 btnElegirRuta,
-                lblInstruccionRuta
+                lblInstruccionRuta,
+                lblFeedbackFase
         );
         root.setRight(panelMetricas);
 

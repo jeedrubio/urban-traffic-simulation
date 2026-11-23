@@ -1,6 +1,7 @@
 package org.example;
 
 import javafx.animation.AnimationTimer;
+import javafx.scene.Cursor;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.Pane;
@@ -21,6 +22,7 @@ public class PanelCiudadFX extends Pane {
     private volatile Set<PuntoGeneracion> destinosResaltados = Set.of();
     private volatile PuntoGeneracion origenSeleccionado;
     private Consumer<PuntoGeneracion> alHacerClicEnSpawn;
+    private Consumer<Interseccion> alHacerClicEnInterseccion;
 
     public PanelCiudadFX(Mapa mapa, List<Vehiculo> vehiculos) {
         this.mapa = mapa;
@@ -32,15 +34,20 @@ public class PanelCiudadFX extends Pane {
         this.canvas = new Canvas(ancho, alto);
         getChildren().add(canvas);
         canvas.setOnMouseClicked(event -> {
-            int columna = (int) (event.getX() / TAMANO_CELDA);
-            int fila = (int) (event.getY() / TAMANO_CELDA);
-            if (fila >= 0 && fila < mapa.getFilas()
-                    && columna >= 0 && columna < mapa.getColumnas()
-                    && mapa.getCelda(fila, columna) instanceof PuntoGeneracion spawn
-                    && alHacerClicEnSpawn != null) {
+            Celda celda = obtenerCeldaBajoCursor(event.getX(), event.getY());
+            if (celda instanceof Interseccion interseccion && alHacerClicEnInterseccion != null) {
+                alHacerClicEnInterseccion.accept(interseccion);
+            } else if (celda instanceof PuntoGeneracion spawn && alHacerClicEnSpawn != null) {
                 alHacerClicEnSpawn.accept(spawn);
             }
         });
+        canvas.setOnMouseMoved(event -> {
+            Celda celda = obtenerCeldaBajoCursor(event.getX(), event.getY());
+            canvas.setCursor(celda instanceof Interseccion && alHacerClicEnInterseccion != null
+                    ? Cursor.HAND
+                    : Cursor.DEFAULT);
+        });
+        canvas.setOnMouseExited(event -> canvas.setCursor(Cursor.DEFAULT));
 
         AnimationTimer timer = new AnimationTimer() {
             @Override
@@ -78,6 +85,19 @@ public class PanelCiudadFX extends Pane {
 
     public void setAlHacerClicEnSpawn(Consumer<PuntoGeneracion> callback) {
         this.alHacerClicEnSpawn = callback;
+    }
+
+    public void setAlHacerClicEnInterseccion(Consumer<Interseccion> callback) {
+        this.alHacerClicEnInterseccion = callback;
+    }
+
+    private Celda obtenerCeldaBajoCursor(double x, double y) {
+        int columna = (int) (x / TAMANO_CELDA);
+        int fila = (int) (y / TAMANO_CELDA);
+        if (fila < 0 || fila >= mapa.getFilas() || columna < 0 || columna >= mapa.getColumnas()) {
+            return null;
+        }
+        return mapa.getCelda(fila, columna);
     }
 
     public void mostrarSeleccionSpawns(
