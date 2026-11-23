@@ -69,6 +69,24 @@ public class CalleUnSentido extends Celda {
     }
 
     @Override
+    public int contarVehiculosEnDireccion(String direccionMovimiento) {
+        if (!direccion.equals(direccionMovimiento)) {
+            return 0;
+        }
+        synchronized (secciones) {
+            int cantidad = 0;
+            for (Vehiculo[] fila : secciones) {
+                for (Vehiculo vehiculo : fila) {
+                    if (vehiculo != null) {
+                        cantidad++;
+                    }
+                }
+            }
+            return cantidad;
+        }
+    }
+
+    @Override
     public void entrar(Vehiculo v) throws InterruptedException {
         synchronized (secciones) {
             while (true) {

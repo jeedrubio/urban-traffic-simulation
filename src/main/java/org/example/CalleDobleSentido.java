@@ -69,6 +69,22 @@ public class CalleDobleSentido extends Celda {
     }
 
     @Override
+    public int contarVehiculosEnDireccion(String direccionMovimiento) {
+        if (!puedeSalirHacia(direccionMovimiento)) {
+            return 0;
+        }
+        int[] entrada = obtenerSeccionEntrada(direccionMovimiento);
+        int[] salida = obtenerSeccionSalida(direccionMovimiento);
+        synchronized (secciones) {
+            int cantidad = secciones[entrada[0]][entrada[1]] == null ? 0 : 1;
+            if (secciones[salida[0]][salida[1]] != null) {
+                cantidad++;
+            }
+            return cantidad;
+        }
+    }
+
+    @Override
     public void entrar(Vehiculo v) throws InterruptedException {
         String dir = v.getDireccionMovimiento();
         int[] ent = obtenerSeccionEntrada(dir);

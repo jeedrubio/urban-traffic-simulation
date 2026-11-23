@@ -16,16 +16,20 @@
             -->
         <phase-config id="4-phase" forced-yellow-duration="2" forced-red-duration="1">
             <!--
-                "duration" is a positive number of seconds.
-                "dynamic" is not currently supported.
+                "duration" is a positive number of seconds, or "dynamic".
+                Dynamic phases use Max Pressure based on movement queues and
+                downstream lane occupancy. Use min-green-duration and
+                max-green-duration on phase-config (defaults: 2 and 30 seconds).
+                All phases in one phase-config must use the same duration mode.
+                To enable Max Pressure, set every phase there to duration="dynamic".
             -->
-            <phase open-directions="north" duration="10"/>
-            <phase open-directions="south" duration="5"/>
-            <phase open-directions="east" duration="5"/>
-            <phase open-directions="west" duration="5"/>
+            <phase open-directions="north" duration="dynamic"/>
+            <phase open-directions="south" duration="dynamic"/>
+            <phase open-directions="east" duration="dynamic"/>
+            <phase open-directions="west" duration="dynamic"/>
         </phase-config>
         <phase-config id="2-phase" forced-yellow-duration="2" forced-red-duration="1">
-            <phase open-directions="north south" duration="10"/>
+            <phase open-directions="north south" duration="5"/>
             <phase open-directions="east west" duration="5"/>
         </phase-config>
     </config>

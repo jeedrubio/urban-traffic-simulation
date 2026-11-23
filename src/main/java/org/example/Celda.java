@@ -38,6 +38,14 @@ public abstract class Celda {
         return true;
     }
 
+    /**
+     * Cantidad de vehículos que ocupan esta celda y se desplazan en la
+     * dirección indicada. Se usa como estimación de cola aguas abajo.
+     */
+    public int contarVehiculosEnDireccion(String direccionMovimiento) {
+        return 0;
+    }
+
     public abstract void dibujar(GraphicsContext gc, double px, double py, double tamano);
 
     protected void dibujarFlecha(GraphicsContext gc, double cx, double cy, String direccion, double largo) {

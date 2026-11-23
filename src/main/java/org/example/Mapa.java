@@ -35,6 +35,7 @@ public class Mapa {
         this.config = config;
         this.configuracionesPorInterseccion = Map.copyOf(configuracionesPorInterseccion);
         construirDesdeMatriz(matrizDiseño);
+        configurarSemaforos();
     }
 
     private void construirDesdeMatriz(int[][] matriz) {
@@ -62,9 +63,6 @@ public class Mapa {
                         Semaforo sem = configSemaforo == null
                                 ? new Semaforo(config)
                                 : new Semaforo(configSemaforo);
-                        Thread hiloSemaforo = new Thread(sem, "Semaforo-" + i + "-" + j);
-                        hiloSemaforo.setDaemon(true);
-                        hiloSemaforo.start();
                         cuadricula[i][j] = new Interseccion(
                                 i, j, sem, detectarLadosConectados(matriz, i, j));
                         break;
@@ -74,6 +72,29 @@ public class Mapa {
                         puntosSpawn.add(spawn);
                         break;
                     default: throw new IllegalArgumentException("Número no reconocido: " + tipo);
+                }
+            }
+        }
+    }
+
+    private void configurarSemaforos() {
+        for (int fila = 0; fila < filas; fila++) {
+            for (int columna = 0; columna < columnas; columna++) {
+                if (!(cuadricula[fila][columna] instanceof Interseccion interseccion)) {
+                    continue;
+                }
+                Map<String, Celda> adyacentes = new HashMap<>();
+                if (fila > 0) adyacentes.put("NORTE", cuadricula[fila - 1][columna]);
+                if (fila < filas - 1) adyacentes.put("SUR", cuadricula[fila + 1][columna]);
+                if (columna < columnas - 1) adyacentes.put("ESTE", cuadricula[fila][columna + 1]);
+                if (columna > 0) adyacentes.put("OESTE", cuadricula[fila][columna - 1]);
+                interseccion.configurarCeldasAdyacentes(adyacentes);
+            }
+        }
+        for (Celda[] fila : cuadricula) {
+            for (Celda celda : fila) {
+                if (celda instanceof Interseccion interseccion) {
+                    interseccion.iniciarSemaforo();
                 }
             }
         }

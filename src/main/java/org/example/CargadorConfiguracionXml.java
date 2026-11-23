@@ -224,8 +224,20 @@ public final class CargadorConfiguracionXml {
             String id = atributoRequerido(elementoConfiguracion, "id");
             int duracionAmarillo = enteroPositivo(elementoConfiguracion, "forced-yellow-duration");
             int duracionRojo = enteroPositivo(elementoConfiguracion, "forced-red-duration");
+            int duracionVerdeMinima = atributoPositivoOpcional(
+                    elementoConfiguracion,
+                    "min-green-duration",
+                    ConfiguracionSemaforo.DURACION_VERDE_MINIMA_POR_DEFECTO_SEG);
+            int duracionVerdeMaxima = atributoPositivoOpcional(
+                    elementoConfiguracion,
+                    "max-green-duration",
+                    ConfiguracionSemaforo.DURACION_VERDE_MAXIMA_POR_DEFECTO_SEG);
             ConfiguracionSemaforo configuracion = new ConfiguracionSemaforo(
-                    leerFases(elementoConfiguracion), duracionAmarillo, duracionRojo);
+                    leerFases(elementoConfiguracion),
+                    duracionAmarillo,
+                    duracionRojo,
+                    duracionVerdeMinima,
+                    duracionVerdeMaxima);
             if (resultado.putIfAbsent(id, configuracion) != null) {
                 throw error("El identificador de phase-config '" + id + "' está repetido.");
             }
@@ -240,19 +252,24 @@ public final class CargadorConfiguracionXml {
         }
 
         List<FaseSemaforo> fases = new ArrayList<>();
+        Boolean duracionDinamica = null;
         for (Element elementoFase : elementosFase) {
             String duracion = atributoRequerido(elementoFase, "duration");
-            if ("dynamic".equalsIgnoreCase(duracion)) {
-                throw error("duration=\"dynamic\" todavía no está soportado; use una duración en segundos.");
+            boolean faseDinamica = "dynamic".equalsIgnoreCase(duracion);
+            if (duracionDinamica != null && duracionDinamica != faseDinamica) {
+                throw error("Todas las fases de un phase-config deben tener duración fija o duration=\"dynamic\".");
             }
-            int duracionSeg;
-            try {
-                duracionSeg = Integer.parseInt(duracion);
-            } catch (NumberFormatException e) {
-                throw error("Duración de fase no válida: '" + duracion + "'.");
-            }
-            if (duracionSeg <= 0) {
-                throw error("La duración de cada fase debe ser mayor que cero.");
+            duracionDinamica = faseDinamica;
+            int duracionSeg = 0;
+            if (!faseDinamica) {
+                try {
+                    duracionSeg = Integer.parseInt(duracion);
+                } catch (NumberFormatException e) {
+                    throw error("Duración de fase no válida: '" + duracion + "'.");
+                }
+                if (duracionSeg <= 0) {
+                    throw error("La duración de cada fase debe ser mayor que cero.");
+                }
             }
 
             Set<String> direcciones = new LinkedHashSet<>();
@@ -274,7 +291,9 @@ public final class CargadorConfiguracionXml {
             if (direcciones.isEmpty()) {
                 throw error("open-directions debe incluir al menos una dirección.");
             }
-            fases.add(new FaseSemaforo(direcciones, duracionSeg));
+            fases.add(faseDinamica
+                    ? FaseSemaforo.conDuracionDinamica(direcciones)
+                    : new FaseSemaforo(direcciones, duracionSeg));
         }
         return List.copyOf(fases);
     }
@@ -314,6 +333,12 @@ public final class CargadorConfiguracionXml {
             throw error("El atributo '" + atributo + "' debe ser mayor que cero.");
         }
         return valor;
+    }
+
+    private static int atributoPositivoOpcional(Element elemento, String atributo, int valorPorDefecto) {
+        return elemento.hasAttribute(atributo)
+                ? enteroPositivo(elemento, atributo)
+                : valorPorDefecto;
     }
 
     private static int enteroNoNegativo(Element elemento, String atributo) {

@@ -18,6 +18,7 @@ public class Vehiculo implements Runnable {
 
     private volatile Celda celdaActual;
     private volatile String direccionMovimiento = "ESTE";
+    private volatile String direccionSalidaInterseccion;
     private volatile int secFila = 0; // 0 = Arriba, 1 = Abajo
     private volatile int secCol = 0;  // 0 = Izquierda, 1 = Derecha
     private volatile int carrilUnSentido = 0;
@@ -37,6 +38,7 @@ public class Vehiculo implements Runnable {
     public String getId() { return id; }
     public Celda getCeldaActual() { return celdaActual; }
     public String getDireccionMovimiento() { return direccionMovimiento; }
+    public String getDireccionSalidaInterseccion() { return direccionSalidaInterseccion; }
     public int getSecFila() { return secFila; }
     public int getSecCol() { return secCol; }
     public Color getColorAuto() { return colorAuto; }
@@ -112,6 +114,9 @@ public class Vehiculo implements Runnable {
                 Celda siguiente = ruta.get(i);
 
                 this.direccionMovimiento = calcularDireccion(ocupada, siguiente);
+                this.direccionSalidaInterseccion = siguiente instanceof Interseccion && i + 1 < ruta.size()
+                        ? calcularDireccion(siguiente, ruta.get(i + 1))
+                        : null;
                 siguiente.entrar(this);
 
                 ocupada.salir(this);

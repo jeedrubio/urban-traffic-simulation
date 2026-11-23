@@ -33,6 +33,7 @@ class CargadorConfiguracionXmlTest {
         assertEquals(1, configuracionCuatroFases.duracionRojoSeg());
         assertEquals(4, configuracionCuatroFases.fases().size());
         assertEquals(Set.of("NORTE"), configuracionCuatroFases.fases().get(0).direccionesAbiertas());
+        assertFalse(configuracionCuatroFases.esDinamica());
         assertEquals(4, configuracion.getConfiguracionesSemaforo().get("two-phase").duracionRojoSeg());
         assertEquals("four-phase",
                 definicion.getConfiguracionesPorInterseccion().get(new CoordenadaMapa(2, 0)));
@@ -76,16 +77,74 @@ class CargadorConfiguracionXmlTest {
     }
 
     @Test
-    void rechazaFasesDinamicasHastaQueHayaPoliticaDefinida(@TempDir Path directorio)
+    void aceptaFasesDinamicasYUsaLimitesVerdesPredeterminados(@TempDir Path directorio)
             throws IOException, URISyntaxException {
         String xml = Files.readString(Path.of(getClass().getResource("/map-test.xml").toURI()))
+                .replace("duration=\"10\"", "duration=\"dynamic\"")
                 .replace("duration=\"5\"", "duration=\"dynamic\"");
         Path archivo = directorio.resolve("dynamic-map.xml");
         Files.writeString(archivo, xml);
 
+        ConfiguracionSemaforo dinamica = cargador.cargar(archivo)
+                .getConfiguracion()
+                .getConfiguracionesSemaforo()
+                .get("four-phase");
+        assertTrue(dinamica.esDinamica());
+        assertEquals(2, dinamica.duracionVerdeMinimaSeg());
+        assertEquals(30, dinamica.duracionVerdeMaximaSeg());
+        assertTrue(dinamica.fases().stream().allMatch(FaseSemaforo::duracionDinamica));
+    }
+
+    @Test
+    void rechazaMezclarDuracionesFijasYDinamicas(@TempDir Path directorio)
+            throws IOException, URISyntaxException {
+        String xml = Files.readString(Path.of(getClass().getResource("/map-test.xml").toURI()))
+                .replace("duration=\"10\"", "duration=\"dynamic\"");
+        Path archivo = directorio.resolve("mixed-duration-map.xml");
+        Files.writeString(archivo, xml);
+
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class, () -> cargador.cargar(archivo));
-        assertTrue(error.getMessage().contains("dynamic"));
+        assertTrue(error.getMessage().contains("duration"));
+    }
+
+    @Test
+    void cargaLimitesVerdesConfigurablesParaControlDinamico(@TempDir Path directorio)
+            throws IOException, URISyntaxException {
+        String xml = Files.readString(Path.of(getClass().getResource("/map-test.xml").toURI()))
+                .replace(
+                        "phase-config id=\"four-phase\" forced-yellow-duration=\"3\" forced-red-duration=\"1\"",
+                        "phase-config id=\"four-phase\" forced-yellow-duration=\"3\" forced-red-duration=\"1\" "
+                                + "min-green-duration=\"1\" max-green-duration=\"8\"")
+                .replace("duration=\"10\"", "duration=\"dynamic\"")
+                .replace("duration=\"5\"", "duration=\"dynamic\"");
+        Path archivo = directorio.resolve("green-bounds-map.xml");
+        Files.writeString(archivo, xml);
+
+        ConfiguracionSemaforo dinamica = cargador.cargar(archivo)
+                .getConfiguracion()
+                .getConfiguracionesSemaforo()
+                .get("four-phase");
+        assertEquals(1, dinamica.duracionVerdeMinimaSeg());
+        assertEquals(8, dinamica.duracionVerdeMaximaSeg());
+    }
+
+    @Test
+    void rechazaDuracionVerdeMaximaMenorQueLaMinima(@TempDir Path directorio)
+            throws IOException, URISyntaxException {
+        String xml = Files.readString(Path.of(getClass().getResource("/map-test.xml").toURI()))
+                .replace("duration=\"10\"", "duration=\"dynamic\"")
+                .replace("duration=\"5\"", "duration=\"dynamic\"")
+                .replace(
+                        "phase-config id=\"four-phase\" forced-yellow-duration=\"3\" forced-red-duration=\"1\"",
+                        "phase-config id=\"four-phase\" forced-yellow-duration=\"3\" forced-red-duration=\"1\" "
+                                + "min-green-duration=\"5\" max-green-duration=\"4\"");
+        Path archivo = directorio.resolve("invalid-green-bounds-map.xml");
+        Files.writeString(archivo, xml);
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> cargador.cargar(archivo));
+        assertTrue(error.getMessage().contains("máxima"), error.getMessage());
     }
 
     @Test

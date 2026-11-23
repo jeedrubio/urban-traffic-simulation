@@ -21,6 +21,11 @@ public class PuntoGeneracion extends Celda {
     }
 
     @Override
+    public synchronized int contarVehiculosEnDireccion(String direccionMovimiento) {
+        return ocupanteLlegada == null ? 0 : 1;
+    }
+
+    @Override
     public boolean tieneEspacioEntrada(String direccionMovimiento) {
         return !estaOcupada();
     }
