@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -26,6 +27,7 @@ public class Interseccion extends Celda {
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Semaforo semaforo;
     private final Set<Lado> ladosConectados;
+    private volatile Thread hiloSemaforo;
     private volatile Map<String, Celda> celdasAdyacentes = Map.of();
     private final ConcurrentMap<Movimiento, AtomicInteger> colasPorMovimiento = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, AtomicInteger> vehiculosEnCrucePorDireccion = new ConcurrentHashMap<>();
@@ -69,9 +71,23 @@ public class Interseccion extends Celda {
 
     void iniciarSemaforo() {
         if (semaforo != null) {
-            Thread hiloSemaforo = new Thread(semaforo, "Semaforo-" + x + "-" + y);
+            hiloSemaforo = new Thread(semaforo, "Semaforo-" + x + "-" + y);
             hiloSemaforo.setDaemon(true);
             hiloSemaforo.start();
+        }
+    }
+
+    void detenerSemaforo() {
+        Thread hilo = hiloSemaforo;
+        if (hilo != null) {
+            hilo.interrupt();
+        }
+    }
+
+    void esperarDetencionSemaforo() throws InterruptedException {
+        Thread hilo = hiloSemaforo;
+        if (hilo != null) {
+            hilo.join();
         }
     }
 
@@ -128,21 +144,35 @@ public class Interseccion extends Celda {
         maxCongestion.accumulateAndGet(actuales, Math::max);
         boolean contandoEspera = true;
 
-        long inicioEspera = System.currentTimeMillis();
+        long inicioEspera = v.ahoraSimuladoMs();
         try {
-            if (semaforo != null) {
-                while (!"VERDE".equals(semaforo.getEstadoPorDireccion(direccionEntrada))) {
-                    Thread.sleep(50);
+            while (v.estaPausado()
+                    || (semaforo != null
+                    && !"VERDE".equals(semaforo.getEstadoPorDireccion(direccionEntrada)))) {
+                if (!v.esperarActivo(50)) {
+                    throw new InterruptedException("La simulación terminó mientras el vehículo esperaba.");
                 }
             }
 
-            // Solicita el lock de forma interrumpible para garantizar limpieza del contador
-            lock.lockInterruptibly();
+            // La adquisición temporizada permite volver a comprobar pausa y cierre.
+            while (true) {
+                if (!v.esperarSiActiva()) {
+                    throw new InterruptedException("La simulación terminó antes de cruzar.");
+                }
+                if (!lock.tryLock(50, TimeUnit.MILLISECONDS)) {
+                    continue;
+                }
+                if (v.estaPausado()) {
+                    lock.unlock();
+                    continue;
+                }
+                break;
+            }
             direccionesDeVehiculosEnCruce.put(v, direccionEntrada);
             vehiculosEnCrucePorDireccion
                     .computeIfAbsent(direccionEntrada, ignorado -> new AtomicInteger())
                     .incrementAndGet();
-            long tiempoDetenido = System.currentTimeMillis() - inicioEspera;
+            long tiempoDetenido = v.ahoraSimuladoMs() - inicioEspera;
             if (tiempoDetenido > 0) {
                 v.agregarTiempoEsperaSemaforo(tiempoDetenido);
             }

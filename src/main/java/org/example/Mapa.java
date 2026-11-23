@@ -10,31 +10,46 @@ public class Mapa {
     private final List<PuntoGeneracion> puntosDestino = new ArrayList<>();
     private final ConfiguracionSimulacion config;
     private final Map<CoordenadaMapa, String> configuracionesPorInterseccion;
+    private final ControlPausaSimulacion controlPausa;
 
     public Mapa(int[][] matrizDiseño) {
         this(matrizDiseño, new ConfiguracionSimulacion());
     }
 
     public Mapa(int[][] matrizDiseño, ConfiguracionSimulacion config) {
-        this(matrizDiseño, config, Map.of());
+        this(matrizDiseño, config, null);
+    }
+
+    public Mapa(
+            int[][] matrizDiseño,
+            ConfiguracionSimulacion config,
+            ControlPausaSimulacion controlPausa) {
+        this(matrizDiseño, config, Map.of(), controlPausa);
     }
 
     public Mapa(DefinicionSimulacion definicion) {
+        this(definicion, null);
+    }
+
+    public Mapa(DefinicionSimulacion definicion, ControlPausaSimulacion controlPausa) {
         this(
                 definicion.getDiseñoCiudad(),
                 definicion.getConfiguracion(),
-                definicion.getConfiguracionesPorInterseccion());
+                definicion.getConfiguracionesPorInterseccion(),
+                controlPausa);
     }
 
     private Mapa(
             int[][] matrizDiseño,
             ConfiguracionSimulacion config,
-            Map<CoordenadaMapa, String> configuracionesPorInterseccion) {
+            Map<CoordenadaMapa, String> configuracionesPorInterseccion,
+            ControlPausaSimulacion controlPausa) {
         this.filas = matrizDiseño.length;
         this.columnas = matrizDiseño[0].length;
         this.cuadricula = new Celda[filas][columnas];
         this.config = config;
         this.configuracionesPorInterseccion = Map.copyOf(configuracionesPorInterseccion);
+        this.controlPausa = controlPausa;
         construirDesdeMatriz(matrizDiseño);
         configurarSemaforos();
     }
@@ -62,8 +77,8 @@ public class Mapa {
                                     "No existe la configuración de semáforo '" + idConfiguracion + "'.");
                         }
                         Semaforo sem = configSemaforo == null
-                                ? new Semaforo(config)
-                                : new Semaforo(configSemaforo);
+                                ? new Semaforo(config, controlPausa)
+                                : new Semaforo(configSemaforo, controlPausa);
                         cuadricula[i][j] = new Interseccion(
                                 i, j, sem, detectarLadosConectados(matriz, i, j));
                         break;
@@ -101,6 +116,30 @@ public class Mapa {
             for (Celda celda : fila) {
                 if (celda instanceof Interseccion interseccion) {
                     interseccion.iniciarSemaforo();
+                }
+            }
+        }
+    }
+
+    public void detenerSemaforos() {
+        forEachInterseccion(Interseccion::detenerSemaforo);
+    }
+
+    public void esperarDetencionSemaforos() throws InterruptedException {
+        for (Celda[] fila : cuadricula) {
+            for (Celda celda : fila) {
+                if (celda instanceof Interseccion interseccion) {
+                    interseccion.esperarDetencionSemaforo();
+                }
+            }
+        }
+    }
+
+    private void forEachInterseccion(java.util.function.Consumer<Interseccion> accion) {
+        for (Celda[] fila : cuadricula) {
+            for (Celda celda : fila) {
+                if (celda instanceof Interseccion interseccion) {
+                    accion.accept(interseccion);
                 }
             }
         }

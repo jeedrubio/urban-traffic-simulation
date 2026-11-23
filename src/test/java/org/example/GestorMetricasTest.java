@@ -32,4 +32,24 @@ class GestorMetricasTest {
         assertEquals(1, cierres.get());
         assertFalse(gestor.registrarVehiculoAdicionalEsperado());
     }
+
+    @Test
+    void finalizarSinReporteIgnoraLlegadasTardias() {
+        GestorMetricas gestor = GestorMetricas.getInstancia();
+        gestor.reiniciar(1);
+        AtomicInteger cierres = new AtomicInteger();
+        gestor.setAlFinalizarSimulacion(cierres::incrementAndGet);
+
+        gestor.finalizarSinReporte();
+        gestor.registrarLlegada(new Vehiculo(
+                "Tardio",
+                List.of(new PuntoGeneracion(0, 0), new PuntoGeneracion(0, 1)),
+                900));
+
+        assertTrue(gestor.estaFinalizada());
+        assertEquals(0, gestor.getTotalLlegados());
+        assertTrue(gestor.getRegistros().isEmpty());
+        assertEquals(0, cierres.get());
+        assertFalse(gestor.registrarVehiculoAdicionalEsperado());
+    }
 }

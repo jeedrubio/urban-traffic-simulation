@@ -39,6 +39,15 @@ public class GestorMetricas {
     }
 
     /**
+     * Cierra una ejecución cancelada sin emitir su reporte final. También evita
+     * que los vehículos que estuvieran terminando registren datos en la siguiente.
+     */
+    public synchronized void finalizarSinReporte() {
+        reporteFinalEmitido.set(true);
+        alFinalizarSimulacion = null;
+    }
+
+    /**
      * Incluye un vehículo adicional solicitado durante la simulación.
      * Devuelve false si el reporte final ya se emitió.
      */
@@ -94,6 +103,9 @@ public class GestorMetricas {
         Runnable callback = null;
         boolean emitirReporte = false;
         synchronized (this) {
+            if (reporteFinalEmitido.get()) {
+                return;
+            }
             int orden = contadorLlegadas.incrementAndGet();
             RegistroVehiculo registro = new RegistroVehiculo(
                     orden,

@@ -15,6 +15,7 @@ public class Vehiculo implements Runnable {
     private final List<Celda> ruta;
     private final int tiempoCruce;
     private final Color colorAuto;
+    private final ControlPausaSimulacion controlPausa;
 
     private volatile Celda celdaActual;
     private volatile String direccionMovimiento = "ESTE";
@@ -29,9 +30,18 @@ public class Vehiculo implements Runnable {
     private final AtomicLong tiempoEsperaSemaforoMs = new AtomicLong(0);
 
     public Vehiculo(String id, List<Celda> ruta, int tiempoCruce) {
+        this(id, ruta, tiempoCruce, null);
+    }
+
+    public Vehiculo(
+            String id,
+            List<Celda> ruta,
+            int tiempoCruce,
+            ControlPausaSimulacion controlPausa) {
         this.id = id;
         this.ruta = ruta;
         this.tiempoCruce = tiempoCruce;
+        this.controlPausa = controlPausa;
         this.colorAuto = PALETA[new Random().nextInt(PALETA.length)];
     }
 
@@ -53,6 +63,26 @@ public class Vehiculo implements Runnable {
 
     public void agregarTiempoEsperaSemaforo(long ms) {
         this.tiempoEsperaSemaforoMs.addAndGet(ms);
+    }
+
+    long ahoraSimuladoMs() {
+        return controlPausa == null ? System.currentTimeMillis() : controlPausa.ahoraMillis();
+    }
+
+    boolean estaPausado() {
+        return controlPausa != null && controlPausa.estaPausada();
+    }
+
+    boolean esperarSiActiva() throws InterruptedException {
+        return controlPausa == null || controlPausa.esperarActiva();
+    }
+
+    boolean esperarActivo(long duracionMs) throws InterruptedException {
+        if (controlPausa == null) {
+            Thread.sleep(duracionMs);
+            return true;
+        }
+        return controlPausa.esperarActivo(duracionMs);
     }
 
     public long getTiempoTotalMs() {
@@ -95,7 +125,7 @@ public class Vehiculo implements Runnable {
     @Override
     public void run() {
         Celda ocupada = null;
-        this.tiempoInicioMs = System.currentTimeMillis();
+        this.tiempoInicioMs = ahoraSimuladoMs();
         try {
             if (ruta == null || ruta.isEmpty()) return;
 
@@ -104,38 +134,50 @@ public class Vehiculo implements Runnable {
             if (ruta.size() > 1) {
                 this.direccionMovimiento = calcularDireccion(inicio, ruta.get(1));
             }
+            if (!esperarSiActiva()) return;
             inicio.entrar(this);
             ocupada = inicio;
             this.celdaActual = inicio;
-            Thread.sleep(tiempoCruce / 2);
+            if (!esperarActivo(tiempoCruce / 2)) return;
 
             // 2. Recorrer las siguientes celdas avanzando sección por sección
             for (int i = 1; i < ruta.size(); i++) {
                 Celda siguiente = ruta.get(i);
 
+                if (!esperarSiActiva()) return;
                 this.direccionMovimiento = calcularDireccion(ocupada, siguiente);
                 this.direccionSalidaInterseccion = siguiente instanceof Interseccion && i + 1 < ruta.size()
                         ? calcularDireccion(siguiente, ruta.get(i + 1))
                         : null;
                 siguiente.entrar(this);
 
+                if (!esperarSiActiva()) {
+                    siguiente.salir(this);
+                    return;
+                }
                 ocupada.salir(this);
                 ocupada = siguiente;
                 this.celdaActual = siguiente;
 
                 if (siguiente instanceof Interseccion && i + 1 < ruta.size()) {
                     this.direccionMovimiento = calcularDireccion(siguiente, ruta.get(i + 1));
-                    Thread.sleep(tiempoCruce);
+                    if (!esperarActivo(tiempoCruce)) return;
                 } else {
-                    Thread.sleep(tiempoCruce / 2);
+                    if (!esperarActivo(tiempoCruce / 2)) return;
+                    if (!esperarSiActiva()) return;
                     siguiente.avanzarDentroDeCelda(this);
-                    Thread.sleep(tiempoCruce / 2);
+                    if (!esperarActivo(tiempoCruce / 2)) return;
                 }
             }
 
             // 3. Registrar finalización exitosa y métricas de viaje
-            this.tiempoFinMs = System.currentTimeMillis();
-            GestorMetricas.getInstancia().registrarLlegada(this);
+            this.tiempoFinMs = ahoraSimuladoMs();
+            Runnable registrarLlegada = () -> GestorMetricas.getInstancia().registrarLlegada(this);
+            if (controlPausa == null) {
+                registrarLlegada.run();
+            } else {
+                controlPausa.ejecutarSiNoFinalizada(registrarLlegada);
+            }
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -49,4 +49,37 @@ class GestorVehiculosTest {
         assertFalse(gestor.crearVehiculoEnRuta(origen, destino, false)
                 .get(5, TimeUnit.SECONDS));
     }
+
+    @Test
+    void detenerInterrumpeVehiculosYEvitaNuevasCreaciones() throws Exception {
+        GestorMetricas metricas = GestorMetricas.getInstancia();
+        metricas.reiniciar(1);
+        ControlPausaSimulacion control = new ControlPausaSimulacion();
+        Mapa mapa = new Mapa(new int[][]{{8, 9}}, new ConfiguracionSimulacion());
+        List<Vehiculo> vehiculos = new CopyOnWriteArrayList<>();
+        GestorVehiculos gestor = new GestorVehiculos(mapa, vehiculos, metricas, control);
+
+        assertTrue(gestor.crearVehiculoEnRuta(
+                mapa.getPuntosSpawn().get(0),
+                mapa.getPuntosDestino().get(0),
+                false).get(5, TimeUnit.SECONDS));
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (vehiculos.get(0).getCeldaActual() == null && System.nanoTime() < limite) {
+            Thread.sleep(5);
+        }
+        assertNotNull(vehiculos.get(0).getCeldaActual());
+
+        control.pausar();
+        control.finalizar();
+        gestor.detener();
+        gestor.esperarDetencion();
+
+        assertNull(vehiculos.get(0).getCeldaActual());
+        assertFalse(mapa.getPuntosSpawn().get(0).estaOcupada());
+        assertFalse(gestor.crearVehiculoEnRuta(
+                mapa.getPuntosSpawn().get(0),
+                mapa.getPuntosDestino().get(0),
+                false).get());
+        assertEquals(0, metricas.getTotalLlegados());
+    }
 }

@@ -112,6 +112,48 @@ class SemaforoCambioManualTest {
         }
     }
 
+    @Test
+    void pausarDuranteAmarilloORojoConservaLosIntervalosRestantes() throws Exception {
+        ControlPausaSimulacion control = new ControlPausaSimulacion();
+        Semaforo semaforo = new Semaforo(List.of(
+                new FaseSemaforo(Set.of("NORTE", "SUR"), 30),
+                new FaseSemaforo(Set.of("ESTE", "OESTE"), 30)
+        ), 180L, 180L,
+                ConfiguracionSemaforo.DURACION_VERDE_MINIMA_POR_DEFECTO_SEG * 1000L,
+                ConfiguracionSemaforo.DURACION_VERDE_MAXIMA_POR_DEFECTO_SEG * 1000L,
+                control);
+        Thread controlador = new Thread(semaforo, "TestSemaforoPausa");
+        controlador.setDaemon(true);
+        controlador.start();
+
+        try {
+            esperarEstado(semaforo, "NORTE", "VERDE");
+            CompletableFuture<Integer> cambio = semaforo.solicitarAvanceManual();
+            esperarEstado(semaforo, "NORTE", "AMARILLO");
+            Thread.sleep(50);
+            control.pausar();
+            Thread.sleep(220);
+            assertEquals("AMARILLO", semaforo.getEstadoPorDireccion("NORTE"));
+            assertFalse(cambio.isDone());
+
+            control.reanudar();
+            esperarCondicion(() -> todosEnRojo(semaforo));
+            Thread.sleep(50);
+            control.pausar();
+            Thread.sleep(220);
+            assertTrue(todosEnRojo(semaforo));
+            assertFalse(cambio.isDone());
+
+            control.reanudar();
+            assertEquals(1, cambio.get(1, TimeUnit.SECONDS));
+            assertEquals("VERDE", semaforo.getEstadoPorDireccion("ESTE"));
+        } finally {
+            control.finalizar();
+            controlador.interrupt();
+            controlador.join(1000);
+        }
+    }
+
     private void esperarEstado(Semaforo semaforo, String direccion, String estado)
             throws InterruptedException {
         esperarCondicion(() -> estado.equals(semaforo.getEstadoPorDireccion(direccion)));

@@ -18,6 +18,7 @@ public class PanelCiudadFX extends Pane {
     private final List<Vehiculo> vehiculos;
     private final double TAMANO_CELDA = 110.0;
     private final Canvas canvas;
+    private final AnimationTimer timer;
     private volatile Set<PuntoGeneracion> spawnsResaltados = Set.of();
     private volatile Set<PuntoGeneracion> destinosResaltados = Set.of();
     private volatile PuntoGeneracion origenSeleccionado;
@@ -50,13 +51,17 @@ public class PanelCiudadFX extends Pane {
         });
         canvas.setOnMouseExited(event -> canvas.setCursor(Cursor.DEFAULT));
 
-        AnimationTimer timer = new AnimationTimer() {
+        timer = new AnimationTimer() {
             @Override
             public void handle(long now) {
                 dibujarEscena();
             }
         };
         timer.start();
+    }
+
+    public void detenerAnimacion() {
+        timer.stop();
     }
 
     private void dibujarEscena() {

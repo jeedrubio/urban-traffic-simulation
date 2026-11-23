@@ -5,10 +5,19 @@ import java.util.concurrent.ExecutionException;
 public class GeneradorTrafico implements Runnable {
     private final ConfiguracionSimulacion config;
     private final GestorVehiculos gestorVehiculos;
+    private final ControlPausaSimulacion controlPausa;
 
     public GeneradorTrafico(GestorVehiculos gestorVehiculos, ConfiguracionSimulacion config) {
+        this(gestorVehiculos, config, null);
+    }
+
+    public GeneradorTrafico(
+            GestorVehiculos gestorVehiculos,
+            ConfiguracionSimulacion config,
+            ControlPausaSimulacion controlPausa) {
         this.gestorVehiculos = gestorVehiculos;
         this.config = config;
+        this.controlPausa = controlPausa;
     }
 
     @Override
@@ -17,7 +26,14 @@ public class GeneradorTrafico implements Runnable {
         try {
             while (!Thread.currentThread().isInterrupted()
                     && vehiculosGenerados < config.getCantidadVehiculos()) {
-                Thread.sleep(2000);
+                if (controlPausa == null) {
+                    Thread.sleep(2000);
+                } else if (!controlPausa.esperarActivo(2000)) {
+                    break;
+                }
+                if (controlPausa != null && !controlPausa.esperarActiva()) {
+                    break;
+                }
                 try {
                     if (gestorVehiculos.crearVehiculoAleatorio(false).get()) {
                         vehiculosGenerados++;

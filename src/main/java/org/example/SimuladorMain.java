@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SimuladorMain extends Application {
 
@@ -291,18 +292,21 @@ public class SimuladorMain extends Application {
             ConfiguracionSimulacion config,
             int[][] diseño,
             DefinicionSimulacion definicionXml) {
+        ControlPausaSimulacion controlPausa = new ControlPausaSimulacion();
         // Reiniciar el gestor ANTES de crear el mapa para que registre todas las intersecciones
         GestorMetricas gestor = GestorMetricas.getInstancia();
         gestor.reiniciar(config.getCantidadVehiculos());
 
         Mapa miCiudad = definicionXml == null
-                ? new Mapa(diseño, config)
-                : new Mapa(definicionXml);
+                ? new Mapa(diseño, config, controlPausa)
+                : new Mapa(definicionXml, controlPausa);
 
         boolean hayRutaPosible = miCiudad.getPuntosSpawn().stream().anyMatch(origen ->
                 miCiudad.getPuntosDestino().stream().anyMatch(destino ->
                         origen != destino && miCiudad.calcularRutaDijkstra(origen, destino) != null));
         if (!hayRutaPosible) {
+            controlPausa.finalizar();
+            miCiudad.detenerSemaforos();
             Alert alert = new Alert(
                     Alert.AlertType.ERROR,
                     "Se requiere al menos una ruta alcanzable entre un spawn y un destino distintos.");
@@ -315,7 +319,8 @@ public class SimuladorMain extends Application {
 
         List<Vehiculo> vehiculos = new CopyOnWriteArrayList<>();
 
-        GestorVehiculos gestorVehiculos = new GestorVehiculos(miCiudad, vehiculos, gestor);
+        GestorVehiculos gestorVehiculos =
+                new GestorVehiculos(miCiudad, vehiculos, gestor, controlPausa);
         PanelCiudadFX panelCiudad = new PanelCiudadFX(miCiudad, vehiculos);
         ScrollPane vistaMapa = new ScrollPane(panelCiudad);
         vistaMapa.setPannable(true);
@@ -338,6 +343,16 @@ public class SimuladorMain extends Application {
         Label lblCongestion = crearDatoPanel("Congestión máx.: 0");
         Label lblEstado = crearDatoPanel("Estado: Simulando...");
         lblEstado.setTextFill(Color.LIGHTGREEN);
+
+        Button btnPausa = new Button("Pausar simulación");
+        btnPausa.setMaxWidth(Double.MAX_VALUE);
+        btnPausa.setStyle(
+                "-fx-background-color: #e67e22; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
+
+        Button btnFinalizar = new Button("Finalizar y volver al menú");
+        btnFinalizar.setMaxWidth(Double.MAX_VALUE);
+        btnFinalizar.setStyle(
+                "-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
 
         Button btnVerTabla = new Button("Ver Tabla de Métricas");
         btnVerTabla.setMaxWidth(Double.MAX_VALUE);
@@ -463,6 +478,9 @@ public class SimuladorMain extends Application {
         });
 
         panelCiudad.setAlHacerClicEnInterseccion(interseccion -> {
+            if (gestor.estaFinalizada()) {
+                return;
+            }
             if (interseccion.getCantidadFases() < 2) {
                 lblFeedbackFase.setText("La intersección " + interseccion.getCoordenadaTexto()
                         + " solo tiene una fase configurada.");
@@ -494,6 +512,8 @@ public class SimuladorMain extends Application {
                 lblEspera,
                 lblCongestion,
                 btnVerTabla,
+                btnPausa,
+                btnFinalizar,
                 new Separator(),
                 btnAutoAleatorio,
                 btnElegirRuta,
@@ -522,11 +542,75 @@ public class SimuladorMain extends Application {
         actualizadorMetricas.setCycleCount(Timeline.INDEFINITE);
         actualizadorMetricas.play();
 
+        Thread[] hiloGenerador = new Thread[1];
+        AtomicBoolean detencionIniciada = new AtomicBoolean();
+        Runnable detenerEjecucion = () -> {
+            if (!detencionIniciada.compareAndSet(false, true)) {
+                return;
+            }
+            controlPausa.finalizar();
+            if (hiloGenerador[0] != null) {
+                hiloGenerador[0].interrupt();
+            }
+            gestorVehiculos.detener();
+            miCiudad.detenerSemaforos();
+            panelCiudad.detenerAnimacion();
+            actualizadorMetricas.stop();
+
+            Thread limpieza = new Thread(() -> {
+                try {
+                    gestorVehiculos.esperarDetencion();
+                    miCiudad.esperarDetencionSemaforos();
+                    if (hiloGenerador[0] != null) {
+                        hiloGenerador[0].join();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }, "LimpiezaSimulacion");
+            limpieza.setDaemon(true);
+            limpieza.start();
+        };
+
+        btnPausa.setOnAction(e -> {
+            if (controlPausa.estaFinalizada()) {
+                return;
+            }
+            if (controlPausa.estaPausada()) {
+                controlPausa.reanudar();
+                btnPausa.setText("Pausar simulación");
+                btnPausa.setStyle(
+                        "-fx-background-color: #e67e22; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
+                lblEstado.setText("Estado: Simulando...");
+                lblEstado.setTextFill(Color.LIGHTGREEN);
+            } else {
+                controlPausa.pausar();
+                btnPausa.setText("Reanudar simulación");
+                btnPausa.setStyle(
+                        "-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8;");
+                lblEstado.setText("Estado: Pausada");
+                lblEstado.setTextFill(Color.GOLD);
+            }
+        });
+
+        btnFinalizar.setOnAction(e -> {
+            cancelarSeleccionRuta.run();
+            controlPausa.finalizar();
+            gestor.finalizarSinReporte();
+            detenerEjecucion.run();
+            mostrarMenuConfiguracion(stage);
+        });
+
         gestor.setAlFinalizarSimulacion(() -> Platform.runLater(() -> {
+            if (detencionIniciada.get()) {
+                return;
+            }
+            detenerEjecucion.run();
             cancelarSeleccionRuta.run();
             refrescarPanelLateral.run();
             lblEstado.setText("Estado: Finalizada");
             lblEstado.setTextFill(Color.GOLD);
+            btnPausa.setDisable(true);
             btnAutoAleatorio.setDisable(true);
             btnElegirRuta.setDisable(true);
             lblInstruccionRuta.setText("La simulación finalizó; ya no se pueden agregar autos.");
@@ -541,10 +625,10 @@ public class SimuladorMain extends Application {
         stage.setOnCloseRequest(e -> System.exit(0));
         stage.show();
 
-        GeneradorTrafico generador = new GeneradorTrafico(gestorVehiculos, config);
-        Thread hiloGenerador = new Thread(generador);
-        hiloGenerador.setDaemon(true);
-        hiloGenerador.start();
+        GeneradorTrafico generador = new GeneradorTrafico(gestorVehiculos, config, controlPausa);
+        hiloGenerador[0] = new Thread(generador, "GeneradorTrafico");
+        hiloGenerador[0].setDaemon(true);
+        hiloGenerador[0].start();
     }
 
     private void observarCreacionVehiculo(

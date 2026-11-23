@@ -32,6 +32,7 @@ public class Semaforo implements Runnable {
     private final long duracionVerdeMinimaMs;
     private final long duracionVerdeMaximaMs;
     private final boolean controlDinamico;
+    private final ControlPausaSimulacion controlPausa;
     private final Queue<CompletableFuture<Integer>> avancesManualesPendientes = new ArrayDeque<>();
     private final List<CompletableFuture<Integer>> cambiosEnTransicion = new ArrayList<>();
     private volatile ToDoubleFunction<FaseSemaforo> evaluadorPresion = fase -> 0.0;
@@ -49,22 +50,34 @@ public class Semaforo implements Runnable {
     }
 
     public Semaforo(ConfiguracionSimulacion configuracion) {
+        this(configuracion, null);
+    }
+
+    Semaforo(ConfiguracionSimulacion configuracion, ControlPausaSimulacion controlPausa) {
         this(
                 List.of(
                         new FaseSemaforo(Set.of("NORTE", "SUR"), configuracion.getDuracionVerdeSeg()),
                         new FaseSemaforo(Set.of("ESTE", "OESTE"), configuracion.getDuracionVerdeSeg())
                 ),
-                configuracion.getDuracionAmarilloSeg(),
-                configuracion.getDuracionRojoSeg());
+                configuracion.getDuracionAmarilloSeg() * 1000L,
+                configuracion.getDuracionRojoSeg() * 1000L,
+                ConfiguracionSemaforo.DURACION_VERDE_MINIMA_POR_DEFECTO_SEG * 1000L,
+                ConfiguracionSemaforo.DURACION_VERDE_MAXIMA_POR_DEFECTO_SEG * 1000L,
+                controlPausa);
     }
 
     public Semaforo(ConfiguracionSemaforo configuracion) {
+        this(configuracion, null);
+    }
+
+    Semaforo(ConfiguracionSemaforo configuracion, ControlPausaSimulacion controlPausa) {
         this(
                 configuracion.fases(),
                 configuracion.duracionAmarilloSeg() * 1000L,
                 configuracion.duracionRojoSeg() * 1000L,
                 configuracion.duracionVerdeMinimaSeg() * 1000L,
-                configuracion.duracionVerdeMaximaSeg() * 1000L);
+                configuracion.duracionVerdeMaximaSeg() * 1000L,
+                controlPausa);
     }
 
     public Semaforo(List<FaseSemaforo> fases, int amarilloSeg, int rojoSeg) {
@@ -91,6 +104,22 @@ public class Semaforo implements Runnable {
             long duracionRojoMs,
             long duracionVerdeMinimaMs,
             long duracionVerdeMaximaMs) {
+        this(
+                fases,
+                duracionAmarilloMs,
+                duracionRojoMs,
+                duracionVerdeMinimaMs,
+                duracionVerdeMaximaMs,
+                null);
+    }
+
+    Semaforo(
+            List<FaseSemaforo> fases,
+            long duracionAmarilloMs,
+            long duracionRojoMs,
+            long duracionVerdeMinimaMs,
+            long duracionVerdeMaximaMs,
+            ControlPausaSimulacion controlPausa) {
         if (fases == null || fases.isEmpty()) {
             throw new IllegalArgumentException("El semáforo debe tener al menos una fase.");
         }
@@ -112,6 +141,7 @@ public class Semaforo implements Runnable {
         this.duracionVerdeMinimaMs = duracionVerdeMinimaMs;
         this.duracionVerdeMaximaMs = duracionVerdeMaximaMs;
         this.controlDinamico = hayFasesDinamicas;
+        this.controlPausa = controlPausa;
     }
 
     public synchronized String getEstadoHorizontal() {
@@ -163,27 +193,42 @@ public class Semaforo implements Runnable {
     public void run() {
         int indiceFase = 0;
         long[] ultimaActivacionVerde = new long[fases.size()];
-        Arrays.fill(ultimaActivacionVerde, System.nanoTime());
+        Arrays.fill(ultimaActivacionVerde, ahoraNanos());
         try {
             if (controlDinamico) {
                 indiceFase = elegirFaseConMayorPresion(0, -1);
             }
-            while (!Thread.currentThread().isInterrupted()) {
+            while (!Thread.currentThread().isInterrupted() && !simulacionFinalizada()) {
+                if (controlPausa != null && controlPausa.estaPausada()) {
+                    synchronized (this) {
+                        esperarComoMaximo(TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS));
+                    }
+                    continue;
+                }
                 FaseSemaforo fase = fases.get(indiceFase);
                 cambiarEstados(fase.direccionesAbiertas(), "VERDE", Etapa.VERDE);
-                ultimaActivacionVerde[indiceFase] = System.nanoTime();
+                ultimaActivacionVerde[indiceFase] = ahoraNanos();
                 completarCambiosEnTransicion(indiceFase);
 
                 DecisionFase decision = controlDinamico
                         ? esperarSeleccionDinamica(indiceFase, ultimaActivacionVerde)
                         : esperarDuracionFija(indiceFase, fase.duracionSeg() * 1000L);
+                if (decision == null) {
+                    break;
+                }
                 indiceFase = iniciarDespeje(indiceFase, decision);
-                esperarDuracionProtegida(duracionAmarilloMs);
+                if (!esperarDuracionProtegida(duracionAmarilloMs)) {
+                    break;
+                }
 
                 cambiarEstados(Set.of(), "ROJO", Etapa.ROJO);
-                esperarDuracionProtegida(duracionRojoMs);
+                if (!esperarDuracionProtegida(duracionRojoMs)) {
+                    break;
+                }
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
             List<CompletableFuture<Integer>> solicitudesInterrumpidas = new ArrayList<>();
             synchronized (this) {
                 solicitudesInterrumpidas.addAll(avancesManualesPendientes);
@@ -193,37 +238,55 @@ public class Semaforo implements Runnable {
                 cambiarEstados(Set.of(), "ROJO", Etapa.INACTIVO);
             }
             IllegalStateException detenido =
-                    new IllegalStateException("El controlador del semáforo se detuvo.", e);
+                    new IllegalStateException("El controlador del semáforo se detuvo.");
             solicitudesInterrumpidas.forEach(cambio -> cambio.completeExceptionally(detenido));
-            Thread.currentThread().interrupt();
         }
     }
 
     private DecisionFase esperarDuracionFija(int indiceActual, long duracionMs) throws InterruptedException {
-        long limite = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
+        long limite = ahoraNanos() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
         synchronized (this) {
-            while (avancesManualesPendientes.isEmpty()) {
-                long restante = limite - System.nanoTime();
+            while (!simulacionFinalizada()) {
+                if (controlPausa != null && controlPausa.estaPausada()) {
+                    TimeUnit.MILLISECONDS.timedWait(this, INTERVALO_REVISION_PRESION_MS);
+                    continue;
+                }
+                if (!avancesManualesPendientes.isEmpty()) {
+                    return new DecisionFase(
+                            (indiceActual + 1) % fases.size(),
+                            avancesManualesPendientes.remove());
+                }
+                long restante = limite - ahoraNanos();
                 if (restante <= 0) {
                     return new DecisionFase((indiceActual + 1) % fases.size(), null);
                 }
-                TimeUnit.NANOSECONDS.timedWait(this, restante);
+                TimeUnit.NANOSECONDS.timedWait(
+                        this,
+                        Math.min(restante, TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS)));
             }
-            return new DecisionFase(
-                    (indiceActual + 1) % fases.size(),
-                    avancesManualesPendientes.remove());
+            return null;
         }
     }
 
     private DecisionFase esperarSeleccionDinamica(
             int indiceActual,
             long[] ultimaActivacionVerde) throws InterruptedException {
-        long inicioVerde = System.nanoTime();
+        long inicioVerde = ahoraNanos();
         long duracionVerdeMaximaNanos = TimeUnit.MILLISECONDS.toNanos(duracionVerdeMaximaMs);
         long duracionVerdeMinimaNanos = TimeUnit.MILLISECONDS.toNanos(duracionVerdeMinimaMs);
 
         while (true) {
-            long ahora = System.nanoTime();
+            if (simulacionFinalizada()) {
+                return null;
+            }
+            if (controlPausa != null && controlPausa.estaPausada()) {
+                synchronized (this) {
+                    esperarComoMaximo(TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS));
+                }
+                continue;
+            }
+
+            long ahora = ahoraNanos();
             long transcurrido = ahora - inicioVerde;
             synchronized (this) {
                 if (!avancesManualesPendientes.isEmpty()) {
@@ -269,7 +332,7 @@ public class Semaforo implements Runnable {
                             (indiceActual + 1) % fases.size(),
                             avancesManualesPendientes.remove());
                 }
-                long restanteMaximo = duracionVerdeMaximaNanos - (System.nanoTime() - inicioVerde);
+                long restanteMaximo = duracionVerdeMaximaNanos - (ahoraNanos() - inicioVerde);
                 esperarComoMaximo(TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS));
                 if (restanteMaximo <= 0) {
                     continue;
@@ -284,6 +347,14 @@ public class Semaforo implements Runnable {
                     this,
                     Math.min(nanosegundos, TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS)));
         }
+    }
+
+    private long ahoraNanos() {
+        return controlPausa == null ? System.nanoTime() : controlPausa.ahoraNanos();
+    }
+
+    private boolean simulacionFinalizada() {
+        return controlPausa != null && controlPausa.estaFinalizada();
     }
 
     private double[] calcularPresiones() {
@@ -362,13 +433,16 @@ public class Semaforo implements Runnable {
         cambios.forEach(cambio -> cambio.complete(indiceFase));
     }
 
-    private void esperarDuracionProtegida(long duracionMs) throws InterruptedException {
-        long limite = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
+    private boolean esperarDuracionProtegida(long duracionMs) throws InterruptedException {
+        long limite = ahoraNanos() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
         synchronized (this) {
             long restante;
-            while ((restante = limite - System.nanoTime()) > 0) {
-                TimeUnit.NANOSECONDS.timedWait(this, restante);
+            while (!simulacionFinalizada() && (restante = limite - ahoraNanos()) > 0) {
+                TimeUnit.NANOSECONDS.timedWait(
+                        this,
+                        Math.min(restante, TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS)));
             }
+            return !simulacionFinalizada();
         }
     }
 
