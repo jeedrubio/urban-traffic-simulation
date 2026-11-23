@@ -80,6 +80,38 @@ class SemaforoCambioManualTest {
         }
     }
 
+    @Test
+    void lasConfiguracionesDeSemaforoConviertenAmarilloYRojoDeSegundosAMilisegundos()
+            throws Exception {
+        ConfiguracionSemaforo configuracion = new ConfiguracionSemaforo(List.of(
+                new FaseSemaforo(Set.of("NORTE", "SUR"), 30),
+                new FaseSemaforo(Set.of("ESTE", "OESTE"), 30)
+        ), 1, 1);
+        Semaforo semaforo = new Semaforo(configuracion);
+        Thread controlador = new Thread(semaforo, "TestSemaforoIntervalosConfigurados");
+        controlador.setDaemon(true);
+        controlador.start();
+
+        try {
+            esperarEstado(semaforo, "NORTE", "VERDE");
+            CompletableFuture<Integer> cambio = semaforo.solicitarAvanceManual();
+
+            esperarEstado(semaforo, "NORTE", "AMARILLO");
+            Thread.sleep(100);
+            assertEquals("AMARILLO", semaforo.getEstadoPorDireccion("NORTE"),
+                    "El amarillo debe durar el segundo configurado, no solo unos milisegundos.");
+
+            esperarCondicion(() -> todosEnRojo(semaforo));
+            Thread.sleep(100);
+            assertTrue(todosEnRojo(semaforo),
+                    "El intervalo de todo-rojo debe durar el segundo configurado.");
+            assertEquals(1, cambio.get(2, TimeUnit.SECONDS));
+        } finally {
+            controlador.interrupt();
+            controlador.join(1000);
+        }
+    }
+
     private void esperarEstado(Semaforo semaforo, String direccion, String estado)
             throws InterruptedException {
         esperarCondicion(() -> estado.equals(semaforo.getEstadoPorDireccion(direccion)));

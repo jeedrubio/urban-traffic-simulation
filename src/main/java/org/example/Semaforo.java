@@ -61,8 +61,8 @@ public class Semaforo implements Runnable {
     public Semaforo(ConfiguracionSemaforo configuracion) {
         this(
                 configuracion.fases(),
-                configuracion.duracionAmarilloSeg(),
-                configuracion.duracionRojoSeg(),
+                configuracion.duracionAmarilloSeg() * 1000L,
+                configuracion.duracionRojoSeg() * 1000L,
                 configuracion.duracionVerdeMinimaSeg() * 1000L,
                 configuracion.duracionVerdeMaximaSeg() * 1000L);
     }

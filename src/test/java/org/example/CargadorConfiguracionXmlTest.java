@@ -7,7 +7,10 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -48,6 +51,63 @@ class CargadorConfiguracionXmlTest {
         assertEquals(7, mapa[2][4]);
         assertEquals(6, mapa[3][4]);
         assertEquals(10, mapa[4][4]);
+    }
+
+    @Test
+    void cargaLosCincoMapasDeMuestraConTamanosDistintosYRutasAlcanzables() throws IOException {
+        List<Path> archivos;
+        try (Stream<Path> entradas = Files.list(Path.of("maps"))) {
+            archivos = entradas
+                    .filter(Files::isRegularFile)
+                    .filter(ruta -> ruta.getFileName().toString().endsWith(".xml"))
+                    .sorted()
+                    .toList();
+        }
+
+        assertEquals(5, archivos.size());
+        Set<String> dimensiones = new HashSet<>();
+        boolean hayControlFijo = false;
+        boolean hayControlDinamico = false;
+        for (Path archivo : archivos) {
+            DefinicionSimulacion definicion = cargador.cargar(archivo);
+            int[][] diseño = definicion.getDiseñoCiudad();
+            assertTrue(diseño.length >= 12, archivo.toString());
+            assertTrue(diseño[0].length >= 12, archivo.toString());
+            dimensiones.add(diseño.length + "x" + diseño[0].length);
+            assertTrue(definicion.getConfiguracion().getConfiguracionesSemaforo().size() >= 2);
+
+            int intersecciones = 0;
+            int celdasDeCalle = 0;
+            for (int[] fila : diseño) {
+                for (int tipo : fila) {
+                    if (tipo == 7) {
+                        intersecciones++;
+                    } else if (tipo >= 1 && tipo <= 6) {
+                        celdasDeCalle++;
+                    }
+                }
+            }
+            assertTrue(intersecciones >= 5, archivo.toString());
+            assertTrue(celdasDeCalle >= 20, archivo.toString());
+
+            for (ConfiguracionSemaforo semaforo
+                    : definicion.getConfiguracion().getConfiguracionesSemaforo().values()) {
+                hayControlDinamico |= semaforo.esDinamica();
+                hayControlFijo |= !semaforo.esDinamica();
+            }
+
+            Mapa mapa = new Mapa(definicion);
+            assertTrue(mapa.getPuntosSpawn().size() >= 4, archivo.toString());
+            assertTrue(mapa.getPuntosDestino().size() >= 4, archivo.toString());
+            boolean tieneRutaAlcanzable = mapa.getPuntosSpawn().stream().anyMatch(origen ->
+                    mapa.getPuntosDestino().stream().anyMatch(destino ->
+                            origen != destino && mapa.calcularRutaDijkstra(origen, destino) != null));
+            assertTrue(tieneRutaAlcanzable, archivo.toString());
+        }
+
+        assertEquals(5, dimensiones.size());
+        assertTrue(hayControlFijo);
+        assertTrue(hayControlDinamico);
     }
 
     @Test
