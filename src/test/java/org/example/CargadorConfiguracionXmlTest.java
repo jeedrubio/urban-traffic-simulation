@@ -40,28 +40,60 @@ class CargadorConfiguracionXmlTest {
         assertEquals("two-phase",
                 definicion.getConfiguracionesPorInterseccion().get(new CoordenadaMapa(2, 4)));
 
-        assertEquals(8, mapa[0][0]);
+        assertEquals(10, mapa[0][0]);
         assertEquals(2, mapa[1][0]);
         assertEquals(7, mapa[2][0]);
         assertEquals(5, mapa[2][1]);
         assertEquals(5, mapa[2][3]);
         assertEquals(7, mapa[2][4]);
         assertEquals(6, mapa[3][4]);
-        assertEquals(8, mapa[4][4]);
+        assertEquals(10, mapa[4][4]);
     }
 
     @Test
-    void generaRutaEntreSpawnsDelMapaXml() throws IOException, URISyntaxException {
+    void generaRutaEntrePuntosCombinadosDelMapaXml() throws IOException, URISyntaxException {
         Path archivo = Path.of(getClass().getResource("/map-test.xml").toURI());
         DefinicionSimulacion definicion = cargador.cargar(archivo);
         Mapa mapa = new Mapa(definicion);
 
         PuntoGeneracion origen = mapa.buscarSpawnPorCoordenada(0, 0);
-        PuntoGeneracion destino = mapa.buscarSpawnPorCoordenada(4, 4);
+        PuntoGeneracion destino = mapa.buscarDestinoPorCoordenada(4, 4);
         assertNotNull(origen);
         assertNotNull(destino);
+        assertEquals(2, mapa.getPuntosSpawn().size());
+        assertEquals(2, mapa.getPuntosDestino().size());
         assertNotNull(mapa.calcularRutaDijkstra(origen, destino));
         assertEquals(9, mapa.calcularRutaDijkstra(origen, destino).size());
+    }
+
+    @Test
+    void separaSpawnsYDestinosEnLaRutaYNoPermiteSalirDelDestino(
+            @TempDir Path directorio) throws IOException, URISyntaxException {
+        String xml = Files.readString(Path.of(getClass().getResource("/map-test.xml").toURI()))
+                .replace(
+                        "id=\"S0\" x=\"0\" y=\"0\" type=\"spawn-destination\"",
+                        "id=\"S0\" x=\"0\" y=\"0\" type=\"spawn\"")
+                .replace(
+                        "id=\"S1\" x=\"4\" y=\"4\" type=\"spawn-destination\"",
+                        "id=\"S1\" x=\"4\" y=\"4\" type=\"destination\"");
+        Path archivo = directorio.resolve("map-separate-endpoints-test.xml");
+        Files.writeString(archivo, xml);
+
+        DefinicionSimulacion definicion = cargador.cargar(archivo);
+        Mapa mapa = new Mapa(definicion);
+        PuntoGeneracion origen = mapa.buscarSpawnPorCoordenada(0, 0);
+        PuntoGeneracion destino = mapa.buscarDestinoPorCoordenada(4, 4);
+
+        assertNotNull(origen);
+        assertTrue(origen.esSpawn());
+        assertFalse(origen.esDestino());
+        assertNotNull(destino);
+        assertFalse(destino.esSpawn());
+        assertTrue(destino.esDestino());
+        assertEquals(1, mapa.getPuntosSpawn().size());
+        assertEquals(1, mapa.getPuntosDestino().size());
+        assertNotNull(mapa.calcularRutaDijkstra(origen, destino));
+        assertNull(mapa.calcularRutaDijkstra(destino, origen));
     }
 
     @Test
@@ -171,6 +203,19 @@ class CargadorConfiguracionXmlTest {
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class, () -> cargador.cargar(archivo));
         assertTrue(error.getMessage().contains("phase-config"));
+    }
+
+    @Test
+    void requiereAlMenosUnSpawnYUnDestino(@TempDir Path directorio)
+            throws IOException, URISyntaxException {
+        String xml = Files.readString(Path.of(getClass().getResource("/map-test.xml").toURI()))
+                .replace("type=\"spawn-destination\"", "type=\"spawn\"");
+        Path archivo = directorio.resolve("missing-destination-map.xml");
+        Files.writeString(archivo, xml);
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> cargador.cargar(archivo));
+        assertTrue(error.getMessage().contains("destination"));
     }
 
     @Test

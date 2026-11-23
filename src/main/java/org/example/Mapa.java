@@ -6,7 +6,8 @@ public class Mapa {
     private Celda[][] cuadricula;
     private int filas;
     private int columnas;
-    private List<PuntoGeneracion> puntosSpawn = new ArrayList<>();
+    private final List<PuntoGeneracion> puntosSpawn = new ArrayList<>();
+    private final List<PuntoGeneracion> puntosDestino = new ArrayList<>();
     private final ConfiguracionSimulacion config;
     private final Map<CoordenadaMapa, String> configuracionesPorInterseccion;
 
@@ -66,10 +67,15 @@ public class Mapa {
                         cuadricula[i][j] = new Interseccion(
                                 i, j, sem, detectarLadosConectados(matriz, i, j));
                         break;
-                    case 8: // PUNTO DE GENERACIÓN
-                        PuntoGeneracion spawn = new PuntoGeneracion(i, j);
-                        cuadricula[i][j] = spawn;
-                        puntosSpawn.add(spawn);
+                    case 8: // SPAWN
+                    case 9: // DESTINO
+                    case 10: // SPAWN Y DESTINO
+                        boolean esSpawn = tipo == 8 || tipo == 10;
+                        boolean esDestino = tipo == 9 || tipo == 10;
+                        PuntoGeneracion punto = new PuntoGeneracion(i, j, esSpawn, esDestino);
+                        cuadricula[i][j] = punto;
+                        if (esSpawn) puntosSpawn.add(punto);
+                        if (esDestino) puntosDestino.add(punto);
                         break;
                     default: throw new IllegalArgumentException("Número no reconocido: " + tipo);
                 }
@@ -133,7 +139,17 @@ public class Mapa {
         return null;
     }
 
-    public List<PuntoGeneracion> getPuntosSpawn() { return puntosSpawn; }
+    public PuntoGeneracion buscarDestinoPorCoordenada(int fila, int col) {
+        for (PuntoGeneracion destino : puntosDestino) {
+            if (destino.x == fila && destino.y == col) {
+                return destino;
+            }
+        }
+        return null;
+    }
+
+    public List<PuntoGeneracion> getPuntosSpawn() { return List.copyOf(puntosSpawn); }
+    public List<PuntoGeneracion> getPuntosDestino() { return List.copyOf(puntosDestino); }
     public Celda getCelda(int x, int y) { return cuadricula[x][y]; }
     public int getFilas() { return filas; }
     public int getColumnas() { return columnas; }

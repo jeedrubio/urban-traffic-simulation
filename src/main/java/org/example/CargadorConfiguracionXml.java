@@ -108,6 +108,8 @@ public final class CargadorConfiguracionXml {
             String tipo = atributoRequerido(elemento, "type").toLowerCase(Locale.ROOT);
             int tipoCelda = switch (tipo) {
                 case "spawn" -> 8;
+                case "destination" -> 9;
+                case "spawn-destination" -> 10;
                 case "intersection" -> 7;
                 default -> throw error("Tipo de nodo desconocido '" + tipo + "' en el nodo " + id + ".");
             };
@@ -139,9 +141,18 @@ public final class CargadorConfiguracionXml {
             }
         }
 
-        long cantidadSpawns = nodos.values().stream().filter(n -> n.tipoCelda == 8).count();
-        if (cantidadSpawns < 2) {
-            throw error("El mapa XML debe declarar al menos dos nodos de tipo spawn.");
+        List<NodoMapa> spawns = nodos.values().stream().filter(NodoMapa::esSpawn).toList();
+        List<NodoMapa> destinos = nodos.values().stream().filter(NodoMapa::esDestino).toList();
+        if (spawns.isEmpty()) {
+            throw error("El mapa XML debe declarar al menos un nodo de tipo spawn o spawn-destination.");
+        }
+        if (destinos.isEmpty()) {
+            throw error("El mapa XML debe declarar al menos un nodo de tipo destination o spawn-destination.");
+        }
+        boolean hayParOrigenDestinoDistinto = spawns.stream().anyMatch(origen ->
+                destinos.stream().anyMatch(destino -> origen.x != destino.x || origen.y != destino.y));
+        if (!hayParOrigenDestinoDistinto) {
+            throw error("El mapa debe incluir un spawn y un destino en nodos distintos.");
         }
 
         int[][] diseñoCiudad = new int[filas][columnas];
@@ -201,7 +212,10 @@ public final class CargadorConfiguracionXml {
         for (int paso = 1; paso < pasos; paso++) {
             int x = desde.x + pasoX * paso;
             int y = desde.y + pasoY * paso;
-            if (diseñoCiudad[y][x] == 7 || diseñoCiudad[y][x] == 8) {
+            if (diseñoCiudad[y][x] == 7
+                    || diseñoCiudad[y][x] == 8
+                    || diseñoCiudad[y][x] == 9
+                    || diseñoCiudad[y][x] == 10) {
                 continue;
             }
             if (caminosAsignados[y][x] != 0 && caminosAsignados[y][x] != codigoCalle) {
@@ -366,7 +380,15 @@ public final class CargadorConfiguracionXml {
         return new IllegalArgumentException(mensaje);
     }
 
-    private record NodoMapa(String id, int x, int y, int tipoCelda) {}
+    private record NodoMapa(String id, int x, int y, int tipoCelda) {
+        private boolean esSpawn() {
+            return tipoCelda == 8 || tipoCelda == 10;
+        }
+
+        private boolean esDestino() {
+            return tipoCelda == 9 || tipoCelda == 10;
+        }
+    }
     private record MapaXml(
             int[][] diseñoCiudad,
             Map<CoordenadaMapa, String> configuracionesPorInterseccion) {}

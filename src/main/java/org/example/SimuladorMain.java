@@ -37,16 +37,16 @@ public class SimuladorMain extends Application {
             // 5 -> CalleDobleSentido: HORIZONTAL
             // 6 -> CalleDobleSentido: VERTICAL
             // 7 -> Interseccion (Semáforo)
-            // 8 -> PuntoGeneracion (Spawn / Destino)
-            {0, 0, 0, 0, 8, 0, 0, 0, 0},
+            // 8 -> Spawn, 9 -> Destino, 10 -> Spawn y destino
+            {0, 0, 0, 0, 10, 0, 0, 0, 0},
             {0, 7, 3, 3, 7, 3, 3, 7, 0},
             {0, 1, 0, 0, 6, 0, 0, 2, 0},
             {0, 1, 0, 0, 6, 0, 0, 2, 0},
-            {8, 7, 5, 5, 7, 5, 5, 7, 8},
+            {10, 7, 5, 5, 7, 5, 5, 7, 10},
             {0, 1, 0, 0, 6, 0, 0, 2, 0},
             {0, 1, 0, 0, 6, 0, 0, 2, 0},
             {0, 7, 4, 4, 7, 4, 4, 7, 0},
-            {0, 0, 0, 0, 8, 0, 0, 0, 0}
+            {0, 0, 0, 0, 10, 0, 0, 0, 0}
     };
 
     private final CargadorConfiguracionXml cargadorXml = new CargadorConfiguracionXml();
@@ -131,14 +131,14 @@ public class SimuladorMain extends Application {
         HBox boxBotones = new HBox(12, btnIniciar);
         boxBotones.setAlignment(Pos.CENTER_RIGHT);
 
-        int[] cantidadSpawns = {0};
         Runnable actualizarModo = () -> {
             boolean modoXml = rbArchivoXml.isSelected();
             int[][] mapaActivo = modoXml
                     ? (definicionXml == null ? null : definicionXml.getDiseñoCiudad())
                     : diseñoCiudad;
 
-            cantidadSpawns[0] = mapaActivo == null ? 0 : contarSpawns(mapaActivo);
+            boolean tieneParOrigenDestino = mapaActivo != null
+                    && tieneParSpawnDestinoDistinto(mapaActivo);
 
             txtVehiculos.setDisable(modoXml);
             txtVerde.setDisable(modoXml);
@@ -161,7 +161,7 @@ public class SimuladorMain extends Application {
                 btnSeleccionarArchivo.setDisable(true);
             }
 
-            btnIniciar.setDisable(cantidadSpawns[0] < 2 || (modoXml && definicionXml == null));
+            btnIniciar.setDisable(!tieneParOrigenDestino || (modoXml && definicionXml == null));
         };
 
         rbManual.setOnAction(e -> {
@@ -211,12 +211,12 @@ public class SimuladorMain extends Application {
                 lblError.setText("Selecciona un archivo XML válido o cambia al modo manual.");
                 return;
             }
-            if (cantidadSpawns[0] < 2) {
-                lblError.setText("Se requieren al menos 2 Spawns para iniciar.");
+            int[][] mapaActivo = modoXml ? definicionXml.getDiseñoCiudad() : diseñoCiudad;
+            if (!tieneParSpawnDestinoDistinto(mapaActivo)) {
+                lblError.setText("Se requiere un spawn y un destino en puntos distintos para iniciar.");
                 return;
             }
 
-            int[][] mapaActivo = modoXml ? definicionXml.getDiseñoCiudad() : diseñoCiudad;
             ConfiguracionSimulacion config = modoXml
                     ? definicionXml.getConfiguracion()
                     : new ConfiguracionSimulacion();
@@ -299,8 +299,13 @@ public class SimuladorMain extends Application {
                 ? new Mapa(diseño, config)
                 : new Mapa(definicionXml);
 
-        if (miCiudad.getPuntosSpawn().size() < 2) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Se requieren al menos 2 Spawns para iniciar.");
+        boolean hayRutaPosible = miCiudad.getPuntosSpawn().stream().anyMatch(origen ->
+                miCiudad.getPuntosDestino().stream().anyMatch(destino ->
+                        origen != destino && miCiudad.calcularRutaDijkstra(origen, destino) != null));
+        if (!hayRutaPosible) {
+            Alert alert = new Alert(
+                    Alert.AlertType.ERROR,
+                    "Se requiere al menos una ruta alcanzable entre un spawn y un destino distintos.");
             alert.showAndWait();
             return;
         }
@@ -395,35 +400,42 @@ public class SimuladorMain extends Application {
             seleccionRutaActiva[0] = true;
             origenSeleccionado[0] = null;
             destinosSeleccionables.clear();
-            panelCiudad.mostrarSeleccionSpawns(miCiudad.getPuntosSpawn(), List.of(), null);
+            panelCiudad.mostrarSeleccionExtremosRuta(miCiudad.getPuntosSpawn(), List.of(), null);
             btnElegirRuta.setText("Cancelar selección");
-            lblInstruccionRuta.setText("Haz clic en el spawn que será el origen.");
+            lblInstruccionRuta.setText("Haz clic en un spawn que será el origen.");
         });
 
-        panelCiudad.setAlHacerClicEnSpawn(spawn -> {
+        panelCiudad.setAlHacerClicEnPuntoRuta(punto -> {
             if (!seleccionRutaActiva[0] || gestor.estaFinalizada()) {
                 return;
             }
             if (origenSeleccionado[0] == null) {
-                origenSeleccionado[0] = spawn;
-                panelCiudad.mostrarSeleccionSpawns(List.of(), List.of(), spawn);
-                lblInstruccionRuta.setText("Buscando destinos alcanzables desde " + coordenada(spawn) + "...");
-                gestorVehiculos.obtenerDestinosAlcanzables(spawn).whenComplete((alcanzables, error) ->
+                if (!punto.esSpawn()) {
+                    lblInstruccionRuta.setText("Ese punto no genera vehículos. Elige un spawn como origen.");
+                    return;
+                }
+                origenSeleccionado[0] = punto;
+                panelCiudad.mostrarSeleccionExtremosRuta(List.of(), List.of(), punto);
+                lblInstruccionRuta.setText("Buscando destinos alcanzables desde " + coordenada(punto) + "...");
+                gestorVehiculos.obtenerDestinosAlcanzables(punto).whenComplete((alcanzables, error) ->
                         Platform.runLater(() -> {
-                            if (!seleccionRutaActiva[0] || origenSeleccionado[0] != spawn) {
+                            if (!seleccionRutaActiva[0] || origenSeleccionado[0] != punto) {
                                 return;
                             }
                             if (error != null || alcanzables.isEmpty()) {
                                 origenSeleccionado[0] = null;
-                                panelCiudad.mostrarSeleccionSpawns(miCiudad.getPuntosSpawn(), List.of(), null);
-                                lblInstruccionRuta.setText("Ese origen no tiene destinos alcanzables. Elige otro spawn.");
+                                panelCiudad.mostrarSeleccionExtremosRuta(
+                                        miCiudad.getPuntosSpawn(), List.of(), null);
+                                lblInstruccionRuta.setText(
+                                        "Ese origen no tiene destinos alcanzables. Elige otro spawn.");
                                 return;
                             }
                             destinosSeleccionables.clear();
                             destinosSeleccionables.addAll(alcanzables);
-                            panelCiudad.mostrarSeleccionSpawns(List.of(), destinosSeleccionables, spawn);
-                            lblInstruccionRuta.setText("Origen " + coordenada(spawn)
-                                    + ". Haz clic en un spawn resaltado para elegir el destino.");
+                            panelCiudad.mostrarSeleccionExtremosRuta(
+                                    List.of(), destinosSeleccionables, punto);
+                            lblInstruccionRuta.setText("Origen " + coordenada(punto)
+                                    + ". Haz clic en un destino resaltado.");
                         }));
                 return;
             }
@@ -433,16 +445,16 @@ public class SimuladorMain extends Application {
                 return;
             }
 
-            if (!destinosSeleccionables.contains(spawn)) {
+            if (!destinosSeleccionables.contains(punto)) {
                 lblInstruccionRuta.setText("Elige uno de los destinos resaltados.");
                 return;
             }
             PuntoGeneracion origen = origenSeleccionado[0];
             cancelarSeleccionRuta.run();
             lblInstruccionRuta.setText("Creando auto para la ruta " + coordenada(origen)
-                    + " → " + coordenada(spawn) + "...");
+                    + " → " + coordenada(punto) + "...");
             observarCreacionVehiculo(
-                    gestorVehiculos.crearVehiculoEnRuta(origen, spawn, true),
+                    gestorVehiculos.crearVehiculoEnRuta(origen, punto, true),
                     lblInstruccionRuta,
                     gestor,
                     btnAutoAleatorio,
@@ -570,16 +582,25 @@ public class SimuladorMain extends Application {
         return lbl;
     }
 
-    private int contarSpawns(int[][] matriz) {
-        int cantidad = 0;
-        for (int i = 0; i < matriz.length; i++) {
-            for (int j = 0; j < matriz[i].length; j++) {
-                if (matriz[i][j] == 8) {
-                    cantidad++;
+    private boolean tieneParSpawnDestinoDistinto(int[][] matriz) {
+        for (int filaOrigen = 0; filaOrigen < matriz.length; filaOrigen++) {
+            for (int columnaOrigen = 0; columnaOrigen < matriz[filaOrigen].length; columnaOrigen++) {
+                int tipoOrigen = matriz[filaOrigen][columnaOrigen];
+                if (tipoOrigen != 8 && tipoOrigen != 10) {
+                    continue;
+                }
+                for (int filaDestino = 0; filaDestino < matriz.length; filaDestino++) {
+                    for (int columnaDestino = 0; columnaDestino < matriz[filaDestino].length; columnaDestino++) {
+                        int tipoDestino = matriz[filaDestino][columnaDestino];
+                        if ((tipoDestino == 9 || tipoDestino == 10)
+                                && (filaOrigen != filaDestino || columnaOrigen != columnaDestino)) {
+                            return true;
+                        }
+                    }
                 }
             }
         }
-        return cantidad;
+        return false;
     }
 
     private String coordenada(PuntoGeneracion spawn) {

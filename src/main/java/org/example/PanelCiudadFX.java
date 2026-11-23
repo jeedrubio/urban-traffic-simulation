@@ -21,7 +21,7 @@ public class PanelCiudadFX extends Pane {
     private volatile Set<PuntoGeneracion> spawnsResaltados = Set.of();
     private volatile Set<PuntoGeneracion> destinosResaltados = Set.of();
     private volatile PuntoGeneracion origenSeleccionado;
-    private Consumer<PuntoGeneracion> alHacerClicEnSpawn;
+    private Consumer<PuntoGeneracion> alHacerClicEnPuntoRuta;
     private Consumer<Interseccion> alHacerClicEnInterseccion;
 
     public PanelCiudadFX(Mapa mapa, List<Vehiculo> vehiculos) {
@@ -37,13 +37,14 @@ public class PanelCiudadFX extends Pane {
             Celda celda = obtenerCeldaBajoCursor(event.getX(), event.getY());
             if (celda instanceof Interseccion interseccion && alHacerClicEnInterseccion != null) {
                 alHacerClicEnInterseccion.accept(interseccion);
-            } else if (celda instanceof PuntoGeneracion spawn && alHacerClicEnSpawn != null) {
-                alHacerClicEnSpawn.accept(spawn);
+            } else if (celda instanceof PuntoGeneracion punto && alHacerClicEnPuntoRuta != null) {
+                alHacerClicEnPuntoRuta.accept(punto);
             }
         });
         canvas.setOnMouseMoved(event -> {
             Celda celda = obtenerCeldaBajoCursor(event.getX(), event.getY());
-            canvas.setCursor(celda instanceof Interseccion && alHacerClicEnInterseccion != null
+            canvas.setCursor((celda instanceof Interseccion && alHacerClicEnInterseccion != null)
+                    || (celda instanceof PuntoGeneracion && alHacerClicEnPuntoRuta != null)
                     ? Cursor.HAND
                     : Cursor.DEFAULT);
         });
@@ -83,8 +84,8 @@ public class PanelCiudadFX extends Pane {
         }
     }
 
-    public void setAlHacerClicEnSpawn(Consumer<PuntoGeneracion> callback) {
-        this.alHacerClicEnSpawn = callback;
+    public void setAlHacerClicEnPuntoRuta(Consumer<PuntoGeneracion> callback) {
+        this.alHacerClicEnPuntoRuta = callback;
     }
 
     public void setAlHacerClicEnInterseccion(Consumer<Interseccion> callback) {
@@ -100,7 +101,7 @@ public class PanelCiudadFX extends Pane {
         return mapa.getCelda(fila, columna);
     }
 
-    public void mostrarSeleccionSpawns(
+    public void mostrarSeleccionExtremosRuta(
             Collection<PuntoGeneracion> spawns,
             Collection<PuntoGeneracion> destinos,
             PuntoGeneracion origen) {

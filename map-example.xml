@@ -35,10 +35,10 @@
     </config>
     <nodes>
         <node id="S0" x="3" y="0" type="spawn"/>
-        <node id="S1" x="0" y="4" type="spawn"/>
-        <node id="S2" x="11" y="4" type="spawn"/>
-        <node id="S3" x="3" y="11" type="spawn"/>
-        <node id="S4" x="0" y="8" type="spawn"/>
+        <node id="S1" x="0" y="4" type="spawn-destination"/>
+        <node id="S2" x="11" y="4" type="spawn-destination"/>
+        <node id="S3" x="3" y="11" type="spawn-destination"/>
+        <node id="S4" x="0" y="8" type="destination"/>
         <node id="I0" x="3" y="4" type="intersection" phase-config="4-phase"/>
         <node id="I1" x="3" y="8" type="intersection" phase-config="2-phase"/>
     </nodes>

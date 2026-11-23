@@ -15,10 +15,10 @@
         </phase-config>
     </config>
     <nodes>
-        <node id="S0" x="0" y="0" type="spawn"/>
+        <node id="S0" x="0" y="0" type="spawn-destination"/>
         <node id="N0" x="0" y="2" type="intersection" phase-config="four-phase"/>
         <node id="N1" x="4" y="2" type="intersection" phase-config="two-phase"/>
-        <node id="S1" x="4" y="4" type="spawn"/>
+        <node id="S1" x="4" y="4" type="spawn-destination"/>
     </nodes>
     <edges>
         <edge from="S0" to="N0" type="one-way"/>

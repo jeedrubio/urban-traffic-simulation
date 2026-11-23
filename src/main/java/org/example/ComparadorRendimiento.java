@@ -17,8 +17,17 @@ public class ComparadorRendimiento {
     public void ejecutarPrueba() {
         System.out.println("--- INICIANDO BENCHMARK DE RUTAS (" + numeroVehiculos + " vehículos) ---");
         List<PuntoGeneracion> spawns = mapa.getPuntosSpawn();
-        if (spawns.size() < 2) {
-            System.out.println("No hay suficientes puntos de generación para la prueba.");
+        List<PuntoGeneracion> destinosDisponibles = mapa.getPuntosDestino();
+        List<ParRuta> paresAlcanzables = new ArrayList<>();
+        for (PuntoGeneracion origen : spawns) {
+            for (PuntoGeneracion destino : destinosDisponibles) {
+                if (origen != destino && mapa.calcularRutaDijkstra(origen, destino) != null) {
+                    paresAlcanzables.add(new ParRuta(origen, destino));
+                }
+            }
+        }
+        if (paresAlcanzables.isEmpty()) {
+            System.out.println("No hay rutas alcanzables entre puntos de generación y destinos.");
             return;
         }
 
@@ -28,13 +37,9 @@ public class ComparadorRendimiento {
         List<PuntoGeneracion> destinos = new ArrayList<>();
 
         for (int i = 0; i < numeroVehiculos; i++) {
-            PuntoGeneracion origen = spawns.get(rand.nextInt(spawns.size()));
-            PuntoGeneracion destino;
-            do {
-                destino = spawns.get(rand.nextInt(spawns.size()));
-            } while (origen == destino);
-            origenes.add(origen);
-            destinos.add(destino);
+            ParRuta par = paresAlcanzables.get(rand.nextInt(paresAlcanzables.size()));
+            origenes.add(par.origen());
+            destinos.add(par.destino());
         }
 
         // 2. EJECUCIÓN SECUENCIAL
@@ -75,4 +80,6 @@ public class ComparadorRendimiento {
         System.out.println(" > Ejecución Paralela: " + tiempoParalelo + " ms");
         System.out.println("---------------------------------------------------------");
     }
+
+    private record ParRuta(PuntoGeneracion origen, PuntoGeneracion destino) {}
 }

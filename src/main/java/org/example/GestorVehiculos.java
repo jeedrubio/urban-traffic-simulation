@@ -37,9 +37,10 @@ public class GestorVehiculos {
             boolean creado = false;
             try {
                 List<PuntoGeneracion> spawns = mapa.getPuntosSpawn();
+                List<PuntoGeneracion> destinos = mapa.getPuntosDestino();
                 List<ParRuta> rutasPosibles = new ArrayList<>();
                 for (PuntoGeneracion origen : spawns) {
-                    for (PuntoGeneracion destino : spawns) {
+                    for (PuntoGeneracion destino : destinos) {
                         if (origen == destino) {
                             continue;
                         }
@@ -76,7 +77,10 @@ public class GestorVehiculos {
         return CompletableFuture.supplyAsync(() -> {
             boolean creado = false;
             try {
-                if (origen == null || destino == null || origen == destino) {
+                if (origen == null || destino == null
+                        || !origen.esSpawn()
+                        || !destino.esDestino()
+                        || origen == destino) {
                     return false;
                 }
                 List<Celda> ruta = mapa.calcularRutaDijkstra(origen, destino);
@@ -95,11 +99,11 @@ public class GestorVehiculos {
 
     public CompletableFuture<List<PuntoGeneracion>> obtenerDestinosAlcanzables(PuntoGeneracion origen) {
         return CompletableFuture.supplyAsync(() -> {
-            if (origen == null) {
+            if (origen == null || !origen.esSpawn()) {
                 return List.of();
             }
             List<PuntoGeneracion> destinos = new ArrayList<>();
-            for (PuntoGeneracion destino : mapa.getPuntosSpawn()) {
+            for (PuntoGeneracion destino : mapa.getPuntosDestino()) {
                 if (destino == origen) {
                     continue;
                 }
