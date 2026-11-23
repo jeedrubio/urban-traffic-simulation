@@ -88,12 +88,6 @@ public class SimuladorMain extends Application {
         titulo.setFont(Font.font("System", FontWeight.BOLD, 18));
         titulo.setTextFill(Color.WHITE);
 
-        Label subtitulo = new Label(
-                "Configura manualmente o carga un archivo XML. Sin argumento, no se carga ningún archivo automáticamente.");
-        subtitulo.setTextFill(Color.LIGHTGRAY);
-        subtitulo.setFont(Font.font("System", 12));
-        subtitulo.setWrapText(true);
-
         RadioButton rbManual = new RadioButton("Configurar manualmente");
         RadioButton rbArchivoXml = new RadioButton("Cargar configuración XML");
         rbManual.setTextFill(Color.WHITE);
@@ -112,9 +106,6 @@ public class SimuladorMain extends Application {
         HBox selectorArchivo = new HBox(10, btnSeleccionarArchivo, lblArchivo);
         selectorArchivo.setAlignment(Pos.CENTER_LEFT);
 
-        Label lblResumenXml = new Label();
-        lblResumenXml.setTextFill(Color.LIGHTGRAY);
-        lblResumenXml.setWrapText(true);
 
         TextField txtVehiculos = new TextField();
         txtVehiculos.setPromptText("Número de vehículos");
@@ -155,24 +146,19 @@ public class SimuladorMain extends Application {
             txtRojo.setDisable(modoXml);
 
             if (modoXml) {
+                btnSeleccionarArchivo.setDisable(false);
                 lblArchivo.setText(rutaXml == null
                         ? "Selecciona un archivo XML para cargar el mapa y la configuración."
                         : "Archivo: " + rutaXml);
-                if (definicionXml == null) {
-                    lblResumenXml.setText("");
-                } else {
+                if (definicionXml != null) {
                     ConfiguracionSimulacion configXml = definicionXml.getConfiguracion();
                     int[][] mapaXml = definicionXml.getDiseñoCiudad();
                     String idsConfiguracion = String.join(", ",
                             configXml.getConfiguracionesSemaforo().keySet().stream().sorted().toList());
-                    lblResumenXml.setText("Configuración cargada: " + configXml.getCantidadVehiculos()
-                            + " vehículos; mapa de " + mapaXml[0].length + " × " + mapaXml.length
-                            + "; " + configXml.getConfiguracionesSemaforo().size()
-                            + " configuraciones de semáforo (" + idsConfiguracion + ").");
                 }
             } else {
                 lblArchivo.setText("Modo manual: se utilizará el mapa integrado en el simulador.");
-                lblResumenXml.setText("");
+                btnSeleccionarArchivo.setDisable(true);
             }
 
             btnIniciar.setDisable(cantidadSpawns[0] < 2 || (modoXml && definicionXml == null));
@@ -280,11 +266,8 @@ public class SimuladorMain extends Application {
 
         contenedor.getChildren().addAll(
                 titulo,
-                subtitulo,
-                crearEtiqueta("Fuente de configuración:"),
                 opcionesFuente,
                 selectorArchivo,
-                lblResumenXml,
                 crearEtiqueta("Cantidad de vehículos (20 - 200):"),
                 txtVehiculos,
                 crearEtiqueta("Duración de luces del semáforo (segundos):"),
@@ -296,7 +279,7 @@ public class SimuladorMain extends Application {
         ScrollPane desplazamiento = new ScrollPane(contenedor);
         desplazamiento.setFitToWidth(true);
         desplazamiento.setStyle("-fx-background: #232730; -fx-background-color: #232730;");
-        Scene menuScene = new Scene(desplazamiento, 540, 680);
+        Scene menuScene = new Scene(desplazamiento, 540, 420);
         stage.setTitle("Menú Inicial - Simulador de Tráfico");
         stage.setScene(menuScene);
         stage.setOnCloseRequest(e -> System.exit(0));
@@ -367,7 +350,7 @@ public class SimuladorMain extends Application {
         Label lblInstruccionRuta = crearDatoPanel("Los autos añadidos se suman a los configurados.");
         lblInstruccionRuta.setTextFill(Color.LIGHTBLUE);
 
-        Label lblFeedbackFase = crearDatoPanel("Pasa el cursor sobre un cruce y haz clic para cambiar su fase.");
+        Label lblFeedbackFase = crearDatoPanel("Haz click sobre un cruce para cambiar su fase.");
         lblFeedbackFase.setTextFill(Color.LIGHTGREEN);
 
         boolean[] seleccionRutaActiva = {false};
@@ -492,15 +475,14 @@ public class SimuladorMain extends Application {
 
         panelMetricas.getChildren().addAll(
                 lblTituloMetricas,
-                new Separator(),
                 lblEstado,
                 lblLlegados,
                 lblPrimero,
                 lblPromedio,
                 lblEspera,
                 lblCongestion,
-                new Separator(),
                 btnVerTabla,
+                new Separator(),
                 btnAutoAleatorio,
                 btnElegirRuta,
                 lblInstruccionRuta,
@@ -541,7 +523,7 @@ public class SimuladorMain extends Application {
         }));
 
         Scene scene = new Scene(root);
-        stage.setTitle("Simulador de Tráfico JavaFX - (" + config.getCantidadVehiculos() + " vehículos)");
+        stage.setTitle("Simulador de Tráfico - (" + config.getCantidadVehiculos() + " vehículos)");
         stage.setScene(scene);
         stage.centerOnScreen();
         stage.setOnCloseRequest(e -> System.exit(0));
