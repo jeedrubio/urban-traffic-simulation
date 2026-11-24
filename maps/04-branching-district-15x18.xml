@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <map>
     <config>
         <shape height="15" width="18"/>
@@ -9,11 +8,13 @@
             <phase open-directions="south" duration="7"/>
             <phase open-directions="east west" duration="10"/>
         </phase-config>
+
         <phase-config id="district-axis" forced-yellow-duration="2" forced-red-duration="1">
             <phase open-directions="north south" duration="11"/>
             <phase open-directions="east west" duration="8"/>
         </phase-config>
-        <phase-config id="district-adaptive" forced-yellow-duration="2" forced-red-duration="2"
+
+        <phase-config id="district-adaptive" forced-yellow-duration="2" forced-red-duration="2" 
                       min-green-duration="2" max-green-duration="16">
             <phase open-directions="north" duration="dynamic"/>
             <phase open-directions="east" duration="dynamic"/>
@@ -21,16 +22,15 @@
             <phase open-directions="west" duration="dynamic"/>
         </phase-config>
     </config>
+
     <nodes>
         <node id="WEST-GATE" x="0" y="8" type="spawn"/>
         <node id="INNER-ENTRY" x="2" y="8" type="spawn-destination"/>
         <node id="NORTH-LOCAL" x="4" y="1" type="spawn"/>
         <node id="WEST-LOCAL" x="1" y="4" type="destination"/>
-        <node id="UPPER-LOOP" x="6" y="4" type="spawn-destination"/>
         <node id="EAST-LOCAL" x="13" y="4" type="spawn"/>
         <node id="EAST-MARKET" x="13" y="8" type="destination"/>
-        <node id="SOUTH-LOCAL" x="4" y="12" type="destination"/>
-        <node id="SOUTH-GATE" x="9" y="13" type="spawn"/>
+        <node id="SOUTH-GATE" x="9" y="13" type="spawn-destination"/>
         <node id="NORTH-EAST-LOCAL" x="14" y="7" type="spawn-destination"/>
         <node id="SOUTH-EAST-LOCAL" x="14" y="13" type="destination"/>
         <node id="EAST-GATE" x="17" y="10" type="destination"/>
@@ -40,22 +40,24 @@
         <node id="JUNCTION-D" x="9" y="8" type="intersection" phase-config="district-axis"/>
         <node id="JUNCTION-E" x="9" y="10" type="intersection" phase-config="district-adaptive"/>
         <node id="JUNCTION-F" x="14" y="10" type="intersection" phase-config="three-movement"/>
+        <node id="JUNCTION-G" x="4" y="13" type="intersection" phase-config="district-axis"/>
     </nodes>
+
     <edges>
         <edge from="WEST-GATE" to="INNER-ENTRY" type="two-way"/>
         <edge from="INNER-ENTRY" to="JUNCTION-A" type="two-way"/>
-        <edge from="JUNCTION-A" to="JUNCTION-B" type="two-way"/>
+        <edge from="JUNCTION-A" to="JUNCTION-B" type="one-way"/>
         <edge from="JUNCTION-B" to="WEST-LOCAL" type="two-way"/>
         <edge from="NORTH-LOCAL" to="JUNCTION-B" type="two-way"/>
-        <edge from="JUNCTION-B" to="UPPER-LOOP" type="two-way"/>
-        <edge from="UPPER-LOOP" to="JUNCTION-C" type="two-way"/>
+        <edge from="JUNCTION-B" to="JUNCTION-C" type="one-way"/>
         <edge from="JUNCTION-C" to="EAST-LOCAL" type="two-way"/>
         <edge from="JUNCTION-C" to="JUNCTION-D" type="two-way"/>
         <edge from="JUNCTION-D" to="JUNCTION-A" type="two-way"/>
-        <edge from="JUNCTION-A" to="SOUTH-LOCAL" type="two-way"/>
+        <edge from="JUNCTION-G" to="JUNCTION-A" type="one-way"/>
+        <edge from="SOUTH-GATE" to="JUNCTION-G" type="one-way"/>
         <edge from="JUNCTION-D" to="EAST-MARKET" type="two-way"/>
-        <edge from="JUNCTION-D" to="JUNCTION-E" type="two-way"/>
-        <edge from="JUNCTION-E" to="SOUTH-GATE" type="two-way"/>
+        <edge from="JUNCTION-D" to="JUNCTION-E" type="one-way"/>
+        <edge from="JUNCTION-E" to="SOUTH-GATE" type="one-way"/>
         <edge from="JUNCTION-E" to="JUNCTION-F" type="two-way"/>
         <edge from="JUNCTION-F" to="EAST-GATE" type="two-way"/>
         <edge from="NORTH-EAST-LOCAL" to="JUNCTION-F" type="two-way"/>
