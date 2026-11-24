@@ -18,6 +18,7 @@ public class PanelCiudadFX extends Pane {
     private final List<Vehiculo> vehiculos;
     private final double TAMANO_CELDA = 110.0;
     private final Canvas canvas;
+    // Se conserva para detener el repintado al salir de la pantalla de simulación.
     private final AnimationTimer timer;
     private volatile Set<PuntoGeneracion> spawnsResaltados = Set.of();
     private volatile Set<PuntoGeneracion> destinosResaltados = Set.of();

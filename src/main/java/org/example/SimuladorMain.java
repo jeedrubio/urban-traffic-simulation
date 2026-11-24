@@ -292,6 +292,8 @@ public class SimuladorMain extends Application {
             ConfiguracionSimulacion config,
             int[][] diseño,
             DefinicionSimulacion definicionXml) {
+        // Se crea antes del mapa porque este inicia los hilos de semáforos al construirse.
+        // La misma instancia coordina después a vehículos, semáforos y generador.
         ControlPausaSimulacion controlPausa = new ControlPausaSimulacion();
         // Reiniciar el gestor ANTES de crear el mapa para que registre todas las intersecciones
         GestorMetricas gestor = GestorMetricas.getInstancia();
@@ -544,10 +546,13 @@ public class SimuladorMain extends Application {
 
         Thread[] hiloGenerador = new Thread[1];
         AtomicBoolean detencionIniciada = new AtomicBoolean();
+        // El cierre es idempotente: puede solicitarse desde el botón o al completar
+        // normalmente, y la espera por los hilos se delega para no congelar JavaFX.
         Runnable detenerEjecucion = () -> {
             if (!detencionIniciada.compareAndSet(false, true)) {
                 return;
             }
+            // Despierta las esperas pausadas y cancela los trabajadores de esta ejecución.
             controlPausa.finalizar();
             if (hiloGenerador[0] != null) {
                 hiloGenerador[0].interrupt();
@@ -559,6 +564,7 @@ public class SimuladorMain extends Application {
 
             Thread limpieza = new Thread(() -> {
                 try {
+                    // La pantalla ya puede cambiar; este hilo espera el cierre completo en segundo plano.
                     gestorVehiculos.esperarDetencion();
                     miCiudad.esperarDetencionSemaforos();
                     if (hiloGenerador[0] != null) {
@@ -577,6 +583,7 @@ public class SimuladorMain extends Application {
                 return;
             }
             if (controlPausa.estaPausada()) {
+                // El mismo botón cambia texto, color y estado visible al reanudar.
                 controlPausa.reanudar();
                 btnPausa.setText("Pausar simulación");
                 btnPausa.setStyle(
@@ -584,6 +591,7 @@ public class SimuladorMain extends Application {
                 lblEstado.setText("Estado: Simulando...");
                 lblEstado.setTextFill(Color.LIGHTGREEN);
             } else {
+                // Mantiene la pantalla interactiva, pero congela la lógica de la simulación.
                 controlPausa.pausar();
                 btnPausa.setText("Reanudar simulación");
                 btnPausa.setStyle(
@@ -595,6 +603,7 @@ public class SimuladorMain extends Application {
 
         btnFinalizar.setOnAction(e -> {
             cancelarSeleccionRuta.run();
+            // El cierre manual no emite el reporte de finalización normal.
             controlPausa.finalizar();
             gestor.finalizarSinReporte();
             detenerEjecucion.run();
@@ -605,6 +614,7 @@ public class SimuladorMain extends Application {
             if (detencionIniciada.get()) {
                 return;
             }
+            // La finalización normal conserva el reporte y detiene los recursos en segundo plano.
             detenerEjecucion.run();
             cancelarSeleccionRuta.run();
             refrescarPanelLateral.run();
@@ -625,6 +635,7 @@ public class SimuladorMain extends Application {
         stage.setOnCloseRequest(e -> System.exit(0));
         stage.show();
 
+        // El generador empieza después de mostrar la escena y usa el mismo control de pausa.
         GeneradorTrafico generador = new GeneradorTrafico(gestorVehiculos, config, controlPausa);
         hiloGenerador[0] = new Thread(generador, "GeneradorTrafico");
         hiloGenerador[0].setDaemon(true);

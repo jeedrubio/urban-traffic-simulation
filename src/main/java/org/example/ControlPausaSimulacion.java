@@ -4,9 +4,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Coordinador compartido para pausar, reanudar y terminar una ejecución.
- * El reloj simulado deja de avanzar mientras el control está pausado.
+ * El reloj simulado deja de avanzar mientras el control está pausado. Todos
+ * los cambios de estado y las esperas se sincronizan con este objeto.
  */
 public final class ControlPausaSimulacion {
+    // El estado y los acumulados se leen y modifican bajo el monitor de esta instancia.
     private boolean pausada;
     private boolean finalizada;
     private long inicioPausaNanos;
@@ -16,12 +18,14 @@ public final class ControlPausaSimulacion {
         if (!pausada && !finalizada) {
             pausada = true;
             inicioPausaNanos = System.nanoTime();
+            // Despierta tareas que necesitan volver a comprobar el estado de la simulación.
             notifyAll();
         }
     }
 
     public synchronized void reanudar() {
         if (pausada && !finalizada) {
+            // Se descuenta el intervalo completo para conservar el tiempo restante de cada espera.
             tiempoPausadoNanos += System.nanoTime() - inicioPausaNanos;
             pausada = false;
             notifyAll();
@@ -31,10 +35,12 @@ public final class ControlPausaSimulacion {
     public synchronized void finalizar() {
         if (!finalizada) {
             if (pausada) {
+                // También se contabiliza la pausa abierta para dejar el reloj simulado estable.
                 tiempoPausadoNanos += System.nanoTime() - inicioPausaNanos;
             }
             pausada = false;
             finalizada = true;
+            // Las tareas bloqueadas deben salir al terminar, no quedarse esperando una reanudación.
             notifyAll();
         }
     }
@@ -47,6 +53,7 @@ public final class ControlPausaSimulacion {
         return finalizada;
     }
 
+    /** Devuelve el instante del reloj simulado, descontando todo el tiempo pausado. */
     public synchronized long ahoraNanos() {
         long ahora = System.nanoTime();
         long pausaActual = pausada ? ahora - inicioPausaNanos : 0;
@@ -67,6 +74,10 @@ public final class ControlPausaSimulacion {
         return !finalizada;
     }
 
+    /**
+     * Ejecuta una acción mientras la ejecución no haya terminado. La exclusión
+     * evita que un vehículo registre su llegada después de cerrar la simulación.
+     */
     synchronized boolean ejecutarSiNoFinalizada(Runnable accion) {
         if (finalizada) {
             return false;
@@ -83,6 +94,7 @@ public final class ControlPausaSimulacion {
         if (duracionMs < 0) {
             throw new IllegalArgumentException("La duración no puede ser negativa.");
         }
+        // El plazo se calcula con tiempo simulado, por lo que la pausa no consume duración.
         long limite = ahoraNanos() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
         while (!finalizada) {
             while (pausada && !finalizada) {

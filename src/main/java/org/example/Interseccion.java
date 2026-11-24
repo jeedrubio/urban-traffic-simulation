@@ -77,6 +77,7 @@ public class Interseccion extends Celda {
         }
     }
 
+    // El mapa guarda el hilo para poder detenerlo y esperar su salida al cerrar la ejecución.
     void detenerSemaforo() {
         Thread hilo = hiloSemaforo;
         if (hilo != null) {
@@ -146,6 +147,7 @@ public class Interseccion extends Celda {
 
         long inicioEspera = v.ahoraSimuladoMs();
         try {
+            // La cola de entrada se conserva, pero no se avanza mientras el reloj esté pausado.
             while (v.estaPausado()
                     || (semaforo != null
                     && !"VERDE".equals(semaforo.getEstadoPorDireccion(direccionEntrada)))) {
@@ -154,7 +156,7 @@ public class Interseccion extends Celda {
                 }
             }
 
-            // La adquisición temporizada permite volver a comprobar pausa y cierre.
+            // La adquisición temporizada permite revisar pausa y cierre sin quedar bloqueado en el mutex.
             while (true) {
                 if (!v.esperarSiActiva()) {
                     throw new InterruptedException("La simulación terminó antes de cruzar.");
@@ -172,6 +174,7 @@ public class Interseccion extends Celda {
             vehiculosEnCrucePorDireccion
                     .computeIfAbsent(direccionEntrada, ignorado -> new AtomicInteger())
                     .incrementAndGet();
+            // El tiempo de espera medido excluye cualquier pausa global de la simulación.
             long tiempoDetenido = v.ahoraSimuladoMs() - inicioEspera;
             if (tiempoDetenido > 0) {
                 v.agregarTiempoEsperaSemaforo(tiempoDetenido);

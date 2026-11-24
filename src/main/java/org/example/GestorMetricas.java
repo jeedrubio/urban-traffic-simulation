@@ -103,6 +103,7 @@ public class GestorMetricas {
         Runnable callback = null;
         boolean emitirReporte = false;
         synchronized (this) {
+            // No mezclar vehículos que alcanzan el destino después del cierre o de un nuevo inicio.
             if (reporteFinalEmitido.get()) {
                 return;
             }

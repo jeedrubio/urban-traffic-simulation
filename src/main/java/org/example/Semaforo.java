@@ -199,6 +199,7 @@ public class Semaforo implements Runnable {
                 indiceFase = elegirFaseConMayorPresion(0, -1);
             }
             while (!Thread.currentThread().isInterrupted() && !simulacionFinalizada()) {
+                // Si se pausó entre fases, no se activa una nueva luz verde hasta reanudar.
                 if (controlPausa != null && controlPausa.estaPausada()) {
                     synchronized (this) {
                         esperarComoMaximo(TimeUnit.MILLISECONDS.toNanos(INTERVALO_REVISION_PRESION_MS));
@@ -229,6 +230,7 @@ public class Semaforo implements Runnable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
+            // Al cerrar, deja todas las direcciones en rojo y resuelve solicitudes manuales pendientes.
             List<CompletableFuture<Integer>> solicitudesInterrumpidas = new ArrayList<>();
             synchronized (this) {
                 solicitudesInterrumpidas.addAll(avancesManualesPendientes);
@@ -244,6 +246,7 @@ public class Semaforo implements Runnable {
     }
 
     private DecisionFase esperarDuracionFija(int indiceActual, long duracionMs) throws InterruptedException {
+        // El límite usa tiempo simulado; una pausa no acorta la fase verde.
         long limite = ahoraNanos() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
         synchronized (this) {
             while (!simulacionFinalizada()) {
@@ -271,6 +274,7 @@ public class Semaforo implements Runnable {
     private DecisionFase esperarSeleccionDinamica(
             int indiceActual,
             long[] ultimaActivacionVerde) throws InterruptedException {
+        // El controlador dinámico evalúa presión usando la misma referencia temporal pausada.
         long inicioVerde = ahoraNanos();
         long duracionVerdeMaximaNanos = TimeUnit.MILLISECONDS.toNanos(duracionVerdeMaximaMs);
         long duracionVerdeMinimaNanos = TimeUnit.MILLISECONDS.toNanos(duracionVerdeMinimaMs);
@@ -434,6 +438,7 @@ public class Semaforo implements Runnable {
     }
 
     private boolean esperarDuracionProtegida(long duracionMs) throws InterruptedException {
+        // Amarillo y todo-rojo también conservan su duración pendiente durante la pausa.
         long limite = ahoraNanos() + TimeUnit.MILLISECONDS.toNanos(duracionMs);
         synchronized (this) {
             long restante;

@@ -21,8 +21,10 @@ public class GestorVehiculos {
     private final GestorMetricas metricas;
     private final ControlPausaSimulacion controlPausa;
     private final AtomicInteger secuenciaIds = new AtomicInteger();
+    // Se conservan las referencias para poder interrumpir y esperar a todos al finalizar.
     private final List<Thread> hilosVehiculos = new CopyOnWriteArrayList<>();
     private boolean cerrado;
+    // El cálculo de rutas se ejecuta fuera del hilo de JavaFX para no bloquear la interfaz.
     private final ExecutorService calculadorRutas = Executors.newCachedThreadPool(tarea -> {
         Thread hilo = new Thread(tarea, "CalculadorRutas");
         hilo.setDaemon(true);
@@ -52,6 +54,7 @@ public class GestorVehiculos {
             return CompletableFuture.completedFuture(false);
         }
         try {
+            // La búsqueda entre todos los pares posibles puede tardar; se delega al ejecutor.
             return CompletableFuture.supplyAsync(() -> {
                 boolean creado = false;
                 try {
@@ -82,6 +85,7 @@ public class GestorVehiculos {
                     }
                     return false;
                 } finally {
+                    // Si una solicitud adicional no produjo un vehículo, se libera su reserva.
                     if (adicional && !creado) {
                         cancelarReservaSiAbierto();
                     }
@@ -106,6 +110,7 @@ public class GestorVehiculos {
             return CompletableFuture.completedFuture(false);
         }
         try {
+            // Valida y calcula la ruta en segundo plano; el vehículo solo se inicia si sigue abierto.
             return CompletableFuture.supplyAsync(() -> {
                 boolean creado = false;
                 try {
@@ -175,6 +180,7 @@ public class GestorVehiculos {
         vehiculosVisuales.add(nuevo);
         Thread hiloVehiculo = new Thread(nuevo, "Vehiculo-" + nuevo.getId());
         hilosVehiculos.add(hiloVehiculo);
+        // El control de pausa compartido coordina este hilo con señales y generador.
         hiloVehiculo.start();
         return true;
     }
@@ -193,12 +199,14 @@ public class GestorVehiculos {
         if (cerrado) {
             return;
         }
+        // Primero se impiden nuevas tareas y luego se interrumpen los vehículos activos.
         cerrado = true;
         calculadorRutas.shutdown();
         hilosVehiculos.forEach(Thread::interrupt);
     }
 
     public void esperarDetencion() throws InterruptedException {
+        // El cierre no bloquea la interfaz: otro hilo espera a que terminen cálculos y vehículos.
         while (!calculadorRutas.awaitTermination(1, TimeUnit.DAYS)) {
             // Las tareas de cálculo son finitas; sigue esperando a que terminen.
         }

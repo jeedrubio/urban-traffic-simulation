@@ -15,6 +15,7 @@ public class Vehiculo implements Runnable {
     private final List<Celda> ruta;
     private final int tiempoCruce;
     private final Color colorAuto;
+    // Es compartido por todos los componentes de una ejecución; puede ser null en usos aislados.
     private final ControlPausaSimulacion controlPausa;
 
     private volatile Celda celdaActual;
@@ -66,6 +67,7 @@ public class Vehiculo implements Runnable {
     }
 
     long ahoraSimuladoMs() {
+        // Las métricas de viaje no deben incluir el tiempo que la simulación estuvo pausada.
         return controlPausa == null ? System.currentTimeMillis() : controlPausa.ahoraMillis();
     }
 
@@ -129,7 +131,7 @@ public class Vehiculo implements Runnable {
         try {
             if (ruta == null || ruta.isEmpty()) return;
 
-            // 1. Iniciar en la casilla de Spawn
+            // 1. Ocupar el origen y esperar el primer tramo con una espera sensible a la pausa.
             Celda inicio = ruta.get(0);
             if (ruta.size() > 1) {
                 this.direccionMovimiento = calcularDireccion(inicio, ruta.get(1));
@@ -140,7 +142,7 @@ public class Vehiculo implements Runnable {
             this.celdaActual = inicio;
             if (!esperarActivo(tiempoCruce / 2)) return;
 
-            // 2. Recorrer las siguientes celdas avanzando sección por sección
+            // 2. Recorrer la ruta; cada espera preserva su tiempo restante al pausar.
             for (int i = 1; i < ruta.size(); i++) {
                 Celda siguiente = ruta.get(i);
 
@@ -170,7 +172,7 @@ public class Vehiculo implements Runnable {
                 }
             }
 
-            // 3. Registrar finalización exitosa y métricas de viaje
+            // 3. Registrar solo llegadas exitosas; el control descarta las que compiten con el cierre.
             this.tiempoFinMs = ahoraSimuladoMs();
             Runnable registrarLlegada = () -> GestorMetricas.getInstancia().registrarLlegada(this);
             if (controlPausa == null) {
@@ -182,6 +184,7 @@ public class Vehiculo implements Runnable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
+            // También se libera la celda si se interrumpe el vehículo al finalizar la simulación.
             if (ocupada != null) {
                 ocupada.salir(this);
             }

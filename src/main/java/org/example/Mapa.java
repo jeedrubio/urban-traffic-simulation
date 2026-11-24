@@ -99,6 +99,8 @@ public class Mapa {
     }
 
     private void configurarSemaforos() {
+        // Primero se conectan las intersecciones con sus vecinos para que el control de presión máxima
+        // tenga sus colas disponibles; después se inician los hilos de los semáforos.
         for (int fila = 0; fila < filas; fila++) {
             for (int columna = 0; columna < columnas; columna++) {
                 if (!(cuadricula[fila][columna] instanceof Interseccion interseccion)) {
@@ -125,6 +127,7 @@ public class Mapa {
         forEachInterseccion(Interseccion::detenerSemaforo);
     }
 
+    /** Espera la salida de los controladores después de haber solicitado su interrupción. */
     public void esperarDetencionSemaforos() throws InterruptedException {
         for (Celda[] fila : cuadricula) {
             for (Celda celda : fila) {

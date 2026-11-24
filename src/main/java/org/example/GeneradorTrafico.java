@@ -2,6 +2,7 @@ package org.example;
 
 import java.util.concurrent.ExecutionException;
 
+/** Genera vehículos automáticamente respetando la pausa y el cierre de la ejecución. */
 public class GeneradorTrafico implements Runnable {
     private final ConfiguracionSimulacion config;
     private final GestorVehiculos gestorVehiculos;
@@ -26,11 +27,13 @@ public class GeneradorTrafico implements Runnable {
         try {
             while (!Thread.currentThread().isInterrupted()
                     && vehiculosGenerados < config.getCantidadVehiculos()) {
+                // La espera usa el reloj simulado para conservar el intervalo al reanudar.
                 if (controlPausa == null) {
                     Thread.sleep(2000);
                 } else if (!controlPausa.esperarActivo(2000)) {
                     break;
                 }
+                // Evita iniciar una creación si se pausó justo al terminar el intervalo.
                 if (controlPausa != null && !controlPausa.esperarActiva()) {
                     break;
                 }
